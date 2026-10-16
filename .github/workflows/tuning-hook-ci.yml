@@ -1,0 +1,49 @@
+# Fork-only CI for the tuning hook branch; not part of the upstream PR.
+name: tuning-hook-ci
+on:
+  push:
+    branches: ['vikramrojo/feat-tuning-hook-ci']
+  workflow_dispatch:
+jobs:
+  host-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Unit tests
+        run: |
+          tests/host/build.sh
+          build/host/fm1_host pitch-test
+          for t in tuning_test alt_test step_alt_test storage_test; do
+            echo "== $t"; build/host/$t
+          done
+      - name: Zero-table renders match the unmodified engine
+        # Goldens depend on compiler and CPU, so record them from the base
+        # commit on this runner, then check the branch against them.
+        run: |
+          git fetch -q https://github.com/m-vave/fm1_open main
+          base=$(git merge-base HEAD FETCH_HEAD)
+          echo "base $base"
+          git worktree add -q ../base "$base"
+          mkdir -p ../base/tests/host/golden
+          cp tests/host/build.sh tests/host/render.c tests/host/check_golden.sh ../base/tests/host/
+          (cd ../base && OUT=$PWD/build/host tests/host/check_golden.sh --record)
+          cp ../base/tests/host/golden/demos.sha256 tests/host/golden/demos.sha256
+          tests/host/check_golden.sh
+  web-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build.bat --web
+        shell: cmd
+        env:
+          FM1_SOURCE_URL: https://github.com/${{ github.repository }}/archive/${{ github.sha }}.zip
+        run: build.bat --web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-preview
+          path: build/preview/
