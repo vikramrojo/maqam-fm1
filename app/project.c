@@ -2,9 +2,11 @@
 /* Modified 2026-10-17: bind tuning to project contents, not device settings;
  * preserve valid version-1 entries before rewriting their project records;
  * defer edit checkpoints until allocation succeeds; reject tuned saves that
- * overlap a legacy sample bank before changing Flash. */
+ * overlap a legacy sample bank before changing Flash; carry the maqam scale
+ * trailer (8 bytes after the CRC-covered record) and its load/save hooks. */
 #include "instrument.h"
 #include "tuning_hook.h"
+#include "maqam/maqam.h" /* maqam: */
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +30,11 @@ static struct record {
 } record;
 _Static_assert(sizeof record == 4088, "single-sector project record");
 _Static_assert(sizeof record <= FM1_FLASH_SECTOR_BYTES, "one record per sector");
+/* maqam: 8-byte scale trailer after the record, outside the record CRC (stock V13 ignores it). It is
+ * read, programmed and compared with the record; 0xFF when absent. */
+enum { TAIL_BYTES = MAQAM_TRAILER_BYTES };
+_Static_assert(sizeof record + TAIL_BYTES <= FM1_FLASH_SECTOR_BYTES, "record trailer fits the sector");
+static uint8_t record_tail[TAIL_BYTES];
 static struct settings settings;
 static char project_name[12] = {'U', 'N', 'T', 'I', 'T', 'L', 'E', 'D', ' ', ' ', ' ', ' '};
 static unsigned restore_pending, role_pending, settings_dirty;
@@ -76,6 +83,7 @@ static uint32_t checksum(void)
 static int read_sector(unsigned sector)
 {
     uint32_t address = sector * FM1_FLASH_SECTOR_BYTES;
+    memset(record_tail, 0xff, sizeof record_tail); /* maqam: */
     int r = fm1_flash_read(address, &record.header, sizeof record.header);
     if (r)
         return r;
@@ -93,6 +101,8 @@ static int read_sector(unsigned sector)
     if (!r)
         r = fm1_flash_read(address + sizeof record.header + bytes,
                            &record.settings, sizeof record.settings);
+    if (!r && project && !legacy) /* maqam: */
+        r = fm1_flash_read(address + sizeof record, record_tail, sizeof record_tail);
     if (r)
         return r;
     const struct settings *s = &record.settings;
@@ -411,6 +421,8 @@ static int program_record(unsigned sector)
     if (!r)
         r = fm1_flash_write(address, &record,
                             record.header.magic == PROJECT_MAGIC ? sizeof record : sizeof record.header);
+    if (!r && record.header.magic == PROJECT_MAGIC) /* maqam: before the commit word */
+        r = fm1_flash_write(address + sizeof record, record_tail, sizeof record_tail);
     if (!r && record.header.magic == SETTINGS_MAGIC)
         r = fm1_flash_write(address + offsetof(struct record, settings),
                             &record.settings, sizeof record.settings);
@@ -469,8 +481,16 @@ static int write_record(unsigned target, uint32_t generation, unsigned had_save)
                 break;
             at += n;
         }
-        if (at == sizeof record)
-            return 0;
+        if (at == sizeof record) {
+            uint8_t tail[TAIL_BYTES]; /* maqam: */
+            if (record.header.magic != PROJECT_MAGIC)
+                return 0;
+            r = fm1_flash_read(target * FM1_FLASH_SECTOR_BYTES + sizeof record, tail, sizeof tail);
+            if (r)
+                return r;
+            if (!memcmp(tail, record_tail, sizeof tail))
+                return 0;
+        }
     }
     record.header.generation = generation + 1U;
     record.header.target = target;
@@ -542,6 +562,8 @@ int groove_project_save_slot(unsigned slot)
     record.header.magic = PROJECT_MAGIC;
     r = groove_project_capture(&record.project);
     if (!r)
+        maqam_project_save(record_tail); /* maqam: */
+    if (!r)
         r = write_record(slot, generation, saved);
     if (!r) {
         ++project_revision;
@@ -569,6 +591,8 @@ int groove_project_load_slot(unsigned slot)
     if (!r)
         r = read_project(sector);
     uint32_t key[3] = {record.header.generation, record.header.crc, 0};
+    uint8_t tail[TAIL_BYTES]; /* maqam: */
+    memcpy(tail, record_tail, sizeof tail);
     struct groove_tuning tables[GROOVE_TRACKS];
     if (!r && groove_tuning_apply) {
         key[2] = project_tuning_key();
@@ -578,6 +602,8 @@ int groove_project_load_slot(unsigned slot)
         r = apply_edit(&record.project, 0x82000U + slot);
         if (!r && groove_tuning_apply)
             (void)groove_tuning_apply(tables);
+        if (!r)
+            maqam_project_loaded(groove_tuning_apply ? tail : NULL); /* maqam: tables are loaded */
     }
     if (!r && settings.slot != slot) {
         settings.slot = (uint8_t)slot;
@@ -619,6 +645,7 @@ int groove_project_import(const uint8_t *bytes, unsigned length)
             (void)groove_tuning_apply(block.t);
         else
             tuning_zero();
+        maqam_project_loaded(NULL); /* maqam: */
         groove_project_touch();
     }
     return r;
@@ -647,7 +674,7 @@ int groove_factory_load(unsigned index)
     int r = groove_factory_build(index, &record.project);
     if (r) return r;
     r = apply_edit(&record.project, 0x84000U + index);
-    if (!r) { tuning_zero(); groove_project_touch(); }
+    if (!r) { tuning_zero(); maqam_project_loaded(NULL); /* maqam: */ groove_project_touch(); }
     return r;
 }
 /* BLE MIDI follows the radio master switch. Ignore the old separate MIDI-off
@@ -678,6 +705,7 @@ void groove_project_init(void)
 {
     memset(&settings, 0, sizeof settings);
     memcpy(project_name, "UNTITLED    ", 12);
+    maqam_init(); /* maqam: */
     restore_pending = 2;
     role_pending = 2;
     settings_dirty = 0;

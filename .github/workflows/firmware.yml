@@ -80,3 +80,38 @@ jobs:
             build/official-web/
           retention-days: 30
 
+  host-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build host engine and tests (-Werror)
+        run: tests/host/build.sh
+
+      - name: Scale library is valid and app/maqam/scales.h is up to date
+        run: sh tools/check_scales.sh
+
+      - name: Pitch test
+        run: build/host/fm1_host pitch-test
+
+      - name: Unit tests
+        run: |
+          set -e
+          for t in build/host/*_test; do
+            echo "== $t"
+            "$t"
+          done
+
+      - name: Determinism (render twice, compare)
+        run: tests/host/check_golden.sh --determinism
+
+      # Goldens are compiler- and CPU-specific; they were recorded on macOS.
+      - name: Golden hashes (macOS only, advisory)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: tests/host/check_golden.sh

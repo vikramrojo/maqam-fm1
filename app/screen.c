@@ -3,6 +3,7 @@
 #include "fm_patch.h"
 #include "version.h"
 #include "fm1_engine_control.h"
+#include "maqam/maqam.h" /* maqam: */
 #include <string.h>
 enum {
     BACK = 0x0000,
@@ -72,7 +73,9 @@ static const uint8_t punctuation[][6] = {
     {64,0x32,0x49,0x79,0x41,0x3e}, {91,0,0x7f,0x41,0x41,0},
     {92,1,6,0x18,0x60,0}, {93,0,0x41,0x41,0x7f,0}, {94,4,2,1,2,4},
     {95,0x40,0x40,0x40,0x40,0x40}, {96,0,1,2,4,0}, {123,0,8,0x36,0x41,0},
-    {124,0,0,0x7f,0,0}, {125,0,0x41,0x36,8,0}, {126,8,4,8,0x10,8}
+    {124,0,0,0x7f,0,0}, {125,0,0x41,0x36,8,0}, {126,8,4,8,0x10,8},
+    {24,4,2,0x7f,2,4}, {25,0x10,0x20,0x7f,0x20,0x10}, /* maqam: up / down arrows */
+    {26,0x38,0x44,0x44,0x44,0x7f} /* maqam: lowercase d, the half-flat in 24-tone names */
 };
 static void text(unsigned x, unsigned y, const char *s, unsigned scale, uint16_t color,
                  uint16_t background)
@@ -147,7 +150,7 @@ static void text(unsigned x, unsigned y, const char *s, unsigned scale, uint16_t
 }
 /* Eight tracks stay visible on HOME. SEQ maps the sixteen white keys to one
  * quarter of the 64-step pattern. All drawing and edits run on app_control. */
-enum { OVERVIEW, STEPS, FM_EDIT, FM_ENV, FM_LFO, TONE_EDIT, MIX, BLE, PROJECT, NAME, EFFECTS, SOURCE, ACTIONS, STEP_EDIT, RHYTHM, FM_QUICK, PRESET_BROWSER, ARP_EDIT, STARTUP };
+enum { OVERVIEW, STEPS, FM_EDIT, FM_ENV, FM_LFO, TONE_EDIT, MIX, BLE, PROJECT, NAME, EFFECTS, SOURCE, ACTIONS, STEP_EDIT, RHYTHM, FM_QUICK, PRESET_BROWSER, ARP_EDIT, STARTUP, SCALE_PAGE /* maqam: */ };
 enum { OCT_DOWN, OCT_UP, FX, SCL, ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, SEQ, PLAY, REC };
 #define BUTTON(b) (1U << (b))
 static const uint16_t colors[8] = {0x3c9f, 0x07bf, 0x4eae, 0x06d4, 0xac9f, 0xed18, 0xff06, 0xfba5};
@@ -268,6 +271,8 @@ static uint32_t led_cache;
 static uint16_t button_led_cache;
 static struct groove_view frame_views[GROOVE_TRACKS];
 static uint8_t frame_step_notes[16], frame_effects[4];
+static uint16_t frame_step_alt; /* maqam: bit i = tile i is an alt step */
+static struct maqam_view frame_scale; /* maqam: the scale page */
 static uint8_t frame_patch[156];
 static struct groove_fm_controls frame_controls;
 static struct fm1_ble_device frame_devices[FM1_BLE_MAX_DEVICES];
@@ -288,7 +293,7 @@ static void move_step(const struct groove_view *view, int delta, int pages)
 static unsigned navigation_mode(void)
 {
     return page == BLE || page == PROJECT || page == PRESET_BROWSER || page == MIX || page == NAME ||
-        (page >= SOURCE && page <= RHYTHM) || (page == STEPS && !writing) || glo_down;
+        (page >= SOURCE && page <= RHYTHM) || (page == STEPS && !writing) || page == SCALE_PAGE /* maqam: */ || glo_down;
 }
 static unsigned encoder_active(const int16_t values[7])
 {
@@ -603,7 +608,8 @@ static void step_knob(unsigned col, unsigned bank)
     else if (setting == 4) strcpy(value, v ? "ON" : "OFF");
     else if (setting == 5 && !v) strcpy(value, "OFF");
     else if (setting < 7) decimal(value, v, 1);
-    else { struct groove_view view = {0}; groove_get_view(track, cursor, &view); note_name(view.step.note, value); }
+    else { struct groove_view view = {0}; groove_get_view(track, cursor, &view);
+        maqam_note_name(track, view.step.note, view.step.drums & GROOVE_STEP_ALT, value); /* maqam: 24-tone name, alt mark */ }
     if (groove_pad_count(track) && (setting == 1 || setting == 3 || setting == 4 || setting == 7)) strcpy(value, "--");
     knob(col, labels[setting], value, colors[col]);
 }
@@ -666,6 +672,14 @@ static __attribute__((noinline)) void steps(const struct groove_view *v)
         unsigned on = (unsigned)((lane >> step) & 1U), head = v->playing && v->play_step == step;
         uint32_t sig = step | (on << 6) | (head << 7) | ((step == cursor) << 8) |
                        ((uint32_t)frame_step_notes[i] << 9) | (track << 16) | (drum << 19);
+        char label[12];
+        if (!on)
+            strcpy(label, "-");
+        else if (groove_pad_count(track) != 0)
+            strcpy(label, "HIT");
+        else /* maqam: 24-tone name from the track's table (alt table and a '.' mark for alt steps) */
+            maqam_note_name(track, frame_step_notes[i], (frame_step_alt >> i) & 1U, label);
+        sig = signature(sig, label, (unsigned)strlen(label)); /* a table edit changes the name */
         if (sig == cache->tile_cache[i])
             continue;
         cache->tile_cache[i] = sig;
@@ -676,13 +690,6 @@ static __attribute__((noinline)) void steps(const struct groove_view *v)
         if (head)
             paint_fill(x, y, 53, 3, GREEN);
         number(x + 5, y + 5, step + 1, 2, 1, fg, bg);
-        char label[12];
-        if (!on)
-            strcpy(label, "-");
-        else if (groove_pad_count(track) != 0)
-            strcpy(label, "HIT");
-        else
-            note_name(frame_step_notes[i], label);
         text(x + 25, y + 14, label, 1, fg, bg);
     }
 }
@@ -1207,10 +1214,12 @@ static void leds(const struct groove_view *v, unsigned visible)
             if (m.solo)
                 bits |= 1U << white_keys[t + 8];
         }
-    } else
+    } else {
         for (unsigned key = 0; key < 27; ++key)
             if (key_note[key] != 0xff)
                 bits |= 1U << key;
+        if (!navigation_mode() || visible == SCALE_PAGE) bits |= maqam_key_lights(track); /* maqam: degree lights */
+    }
     if (visible == FM_EDIT) {
         for (unsigned i = 0; i < 10; ++i) bits &= ~(1U << edit_keys[i]);
         for (unsigned i = 0; i < 6; ++i)
@@ -1234,7 +1243,7 @@ static void leds(const struct groove_view *v, unsigned visible)
         | ((step_pages ? first + 16 < v->sequence_length : octave > 0) << OCT_UP)
         | ((visible == OVERVIEW) << HOME) | ((visible == EFFECTS) << FX)
         | ((groove_arp_enabled(track) != 0) << ARP)
-        | ((visible == FM_EDIT && (fm_group == 4 || fm_group == 5)) << SCL)
+        | (((visible == FM_EDIT && (fm_group == 4 || fm_group == 5)) || visible == SCALE_PAGE) << SCL)
         | ((visible == STEPS || visible == ACTIONS || visible == STEP_EDIT || visible == RHYTHM) << SEQ)
         | ((writing != 0) << REC)
         | ((v->playing != 0) << PLAY) | ((visible == MIX) << GLO)
@@ -1357,6 +1366,48 @@ static __attribute__((noinline, cold, minsize)) void boot_draw(void)
         paint_fill(58 + 16 * i, 166 - height[i] / 2, 12, height[i],
                    i < boot_phase ? colors[i] : PANEL);
 }
+/* maqam: the scale pages (app/maqam/pages.c builds the view; this only paints it). */
+static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
+{
+    static const char *const pcs[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    uint32_t sig = signature(7U, m, sizeof *m);
+    sig = signature(sig, &track, sizeof track);
+    if (cache->middle_cache != sig) {
+        cache->middle_cache = sig;
+        paint_fill(0, 30, 240, 164, BACK);
+        paint_fill(132, 12, 108, 7, BACK);
+        text(132, 12, m->title, 1, DIM, BACK);
+        text(8, 34, m->sub, strlen(m->sub) <= 19 ? 2 : 1, m->custom ? AMBER : TEXT, BACK);
+        text(8, 54, m->status, 1, colors[track], BACK);
+        text(8, 66, m->note, 1, DIM, BACK);
+        for (unsigned i = 0; i < 12; ++i) {
+            unsigned x = 6 + i * 19, lit = (m->lit >> i) & 1U, root = (m->root >> i) & 1U;
+            uint16_t bg = lit ? colors[track] : PANEL;
+            paint_fill(x, 80, 18, 22, bg);
+            if (root) frame(x, 80, 18, 22, GREEN);
+            if ((m->sel >> i) & 1U) frame(x - 1, 79, 20, 24, ACCENT);
+            text(x + (strlen(pcs[i]) == 1 ? 6 : 3), 87, pcs[i], 1, lit ? BACK : DIM, bg);
+            if (m->tuned) {
+                int c = m->cents[i], tx;
+                unsigned ty;
+                char out[6];
+                maqam_cents_pos(i, maqam_cents_text(c, out), &tx, &ty); /* staggered: -127 is wider than its key */
+                text((unsigned)tx, ty, out, 1, c ? TEXT : DIM, BACK);
+            }
+        }
+        for (unsigned i = 0; i < 3; ++i)
+            text(8, m->big ? (i ? 152U + 14U * (i - 1U) : 122U) : 124U + 14U * i, m->body[i],
+                 m->big && !i ? 2 : 1, i ? DIM : TEXT, BACK);
+        if (m->warn[0]) text(8, 182, m->warn, 1, AMBER, BACK);
+    }
+    for (unsigned i = 0; i < 4; ++i)
+        if (m->knob[i][0][0]) knob(i, m->knob[i][0], m->knob[i][1], colors[i]);
+        else if (cache->foot_cache[i] != 1U) { cache->foot_cache[i] = 1U; paint_fill(6 + 59 * i, 195, 54, 32, BACK); }
+    if (cache->hint_cache != 1U) {
+        cache->hint_cache = 1U;
+        text(6, 231, "ALGO PAGE  SELECT TRACK  HOME BACK", 1, DIM, BACK);
+    }
+}
 static void draw_page_body(const struct fm1_ble_status *ble)
 {
     unsigned visible = boot_active ? STARTUP : glo_down && glo_used ? MIX : page;
@@ -1370,8 +1421,8 @@ static void draw_page_body(const struct fm1_ble_status *ble)
         memset(cache->cell_cache, 0xff, sizeof cache->cell_cache);
         memset(cache->tile_cache, 0xff, sizeof cache->tile_cache);
         memset(cache->meter_cache, 0xff, sizeof cache->meter_cache);
-        if (visible == PROJECT || visible == PRESET_BROWSER)
-            text(8, 8, visible == PROJECT ? "SAVE PROJECT" : "PRESETS", 2, ACCENT, BACK);
+        if (visible == PROJECT || visible == PRESET_BROWSER || visible == SCALE_PAGE)
+            text(8, 8, visible == PROJECT ? "SAVE PROJECT" : visible == SCALE_PAGE ? "SCALE" : "PRESETS", 2, ACCENT, BACK);
     }
     if (visible == STARTUP) { boot_draw(); return; }
     const struct groove_view *views = frame_views, *v = &views[track];
@@ -1382,6 +1433,10 @@ static void draw_page_body(const struct fm1_ble_status *ble)
     }
     if (visible == PROJECT) {
         project_draw();
+        return;
+    }
+    if (visible == SCALE_PAGE) { /* maqam: */
+        scale_draw(&frame_scale);
         return;
     }
     if (visible == BLE) {
@@ -1522,7 +1577,7 @@ static void draw_page_body(const struct fm1_ble_status *ble)
                 label = v->type == GROOVE_SAMPLE ? "SLOT" : "DRUM";
                 decimal(value, drum + 1, 2);
             } else if (col == 2)
-                note_name(selected_note, value);
+                maqam_note_name(track, selected_note, 0, value); /* maqam: 24-tone name */
             else if (v->clock_mode) {
                 label = "MIDI";
                 if (!v->tempo)
@@ -1604,8 +1659,11 @@ static void draw(const struct fm1_ble_status *ble)
             struct groove_view cell = {0};
             groove_get_view(track, first + i, &cell);
             frame_step_notes[i] = cell.step.note;
+            frame_step_alt = (uint16_t)((frame_step_alt & ~(1U << i)) | (((cell.step.drums & GROOVE_STEP_ALT) != 0) << i)); /* maqam: */
         }
     }
+    if (visible == SCALE_PAGE) /* maqam: */
+        maqam_page_view(track, &frame_scale);
     if (visible == EFFECTS) {
         groove_effects_get(frame_effects);
         if (!effects_page) {
@@ -1881,6 +1939,13 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
         page = BLE; glo_down = glo_used = ble_view = ble_forget = ble_action = 0; ble_result = 0;
         goto controls_done;
     }
+    /* maqam: HOME+SCL opens the scale pages (scale pages are not reachable any other way; nothing stock moved). */
+    if ((controls->buttons & (BUTTON(HOME) | BUTTON(SCL))) == (BUTTON(HOME) | BUTTON(SCL)) &&
+        (pressed & (BUTTON(HOME) | BUTTON(SCL)))) {
+        if (page != SCALE_PAGE) maqam_page_open();
+        page = SCALE_PAGE; glo_down = glo_used = 0;
+        goto controls_done;
+    }
     /* Keep the original HOME+PRESETS shortcut, including after HOME opens
      * the browser. A source replacement still requires an explicit SAVE. */
     if ((controls->buttons & BUTTON(HOME)) && controls->encoders[6] &&
@@ -1980,7 +2045,12 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
         }
         goto controls_done;
     }
-    if (page != STEPS && page != ACTIONS)
+    /* maqam: on melodic tracks OCT held = alt hold, double tap = octave; otherwise stock. */
+    if (!maqam_oct_buttons(track, page != STEPS && page != ACTIONS && page != SCALE_PAGE,
+                           !!(controls->buttons & BUTTON(OCT_DOWN)) | (!!(controls->buttons & BUTTON(OCT_UP)) << 1),
+                           !!(pressed & BUTTON(OCT_DOWN)) | (!!(pressed & BUTTON(OCT_UP)) << 1),
+                           key_down != 0, now, &octave) &&
+        page != STEPS && page != ACTIONS && page != SCALE_PAGE)
         octave = clamp(octave + !!(pressed & BUTTON(OCT_UP)) - !!(pressed & BUTTON(OCT_DOWN)), -2, 2);
     if ((pressed & BUTTON(SAVE)) && page != PROJECT && page != BLE &&
         page != SOURCE && page != ACTIONS) {
@@ -2135,6 +2205,7 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
                     paint_next = 180U / PAINT_ROWS;
                     paint_flush();
                     project_result = groove_project_save_slot(project_slot);
+                    maqam_page_save_result(project_result); /* maqam: */
                     project_operation = 1;
                     project_refresh();
                 }
@@ -2147,6 +2218,10 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
             notice_until = now + 2000U;
             project_operation = 0;
         }
+    } else if (page == SCALE_PAGE) { /* maqam: */
+        select_track(controls->encoders[0]);
+        maqam_page_control(track, controls->encoders, key_down & ~blocked_keys,
+                           !!(controls->buttons & BUTTON(OCT_DOWN)) | (!!(controls->buttons & BUTTON(OCT_UP)) << 1));
     } else if (page == NAME) {
         name_cursor = (unsigned)clamp((int)name_cursor + controls->encoders[0], 0, 9);
         if (controls->encoders[2]) {
@@ -2469,6 +2544,10 @@ controls_done:
     }
     for (unsigned key = 0; key < 27; ++key) {
         unsigned note = groove_key_note(track, key, octave);
+        if (maqam_melodic(track)) { /* maqam: layout + direction; a sounding key keeps its note */
+            if (key_note[key] != 0xff && key_track[key] == track) note = key_note[key];
+            else if (!mode && (keys & (1U << key))) note = maqam_key_press(track, key, octave, now);
+        }
         if (key_note[key] != 0xff &&
             (mode || !(keys & (1U << key)) || key_note[key] != note || key_track[key] != track)) {
             if (!post((uint8_t)(0x80 + groove_channel(key_track[key])), key_note[key], 0, 3))

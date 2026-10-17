@@ -1,0 +1,51 @@
+# SLOOP scales: WEST set (index 0..15, order is frozen; see tools/gen_scales.py)
+# Source: 12-tone equal temperament, one semitone = 100 cents. No intonation offsets.
+# Format: see the header of tools/gen_scales.py.
+
+scale CHR   "Chromat" home C
+  up   0. 100. 200. 300. 400. 500. 600. 700. 800. 900. 1000. 1100.
+
+scale MAJ   "Major" home C
+  up   0. 200. 400. 500. 700. 900. 1100.
+
+scale MIN   "Minor" home C
+  up   0. 200. 300. 500. 700. 800. 1000.
+
+scale DOR   "Dorian" home C
+  up   0. 200. 300. 500. 700. 900. 1000.
+
+scale MIX   "Mixolyd" home C
+  up   0. 200. 400. 500. 700. 900. 1000.
+
+scale PEN   "Penta" home C
+  up   0. 200. 400. 700. 900.
+
+scale MPEN  "MinPenta" home C
+  up   0. 300. 500. 700. 1000.
+
+scale HARM  "HarmMin" home C
+  up   0. 200. 300. 500. 700. 800. 1100.
+
+scale PHRY  "Phrygian" home C
+  up   0. 100. 300. 500. 700. 800. 1000.
+
+scale LYD   "Lydian" home C
+  up   0. 200. 400. 600. 700. 900. 1100.
+
+scale LOC   "Locrian" home C
+  up   0. 100. 300. 500. 600. 800. 1000.
+
+scale MEL   "MelMin" home C
+  up   0. 200. 300. 500. 700. 900. 1100.
+
+scale BLUES "Blues" home C
+  up   0. 300. 500. 600. 700. 1000.
+
+scale WHOLE "Whole" home C
+  up   0. 200. 400. 600. 800. 1000.
+
+scale DIMHW "DimHW" home C
+  up   0. 100. 300. 400. 600. 700. 900. 1000.
+
+scale DIMWH "DimWH" home C
+  up   0. 200. 300. 500. 600. 800. 900. 1100.

@@ -1,0 +1,29 @@
+# SLOOP scales: JINS set (index 68..72)
+# Combination scales: a lower jins and a different upper jins (on the 5th), the
+# way the slides read KGLW's "K.G.L.W." scale (a Huseyni pentachord + a neutral Hijaz tetrachord). Each
+# row here is attested: a KGLW song, a named Arabic maqam, or a Hindustani raga. Equal quarter tones
+# (24-TET cents), so every offset is 0, as in PSYCH.
+# Sources: The Pop Descriptivist, "The Microtonal Scales of King Gizzard and the Lizard Wizard", 2024
+#   (slide 62, K.G.L.W.); maqamworld.com (Nairuz, Suznak, Hijaz); Wikipedia, "Darbari Kanada".
+#
+# The jinsas, in quarter-tone steps (each adds up to a perfect 4th, 10):
+#   Bayati 3-3-4   neutral Hijaz 2-5-3   subminor 1-5-4   Rast 4-3-3   low Bhairav 1-7-2   Chahargah 3-5-2
+#   Kanada 4-1-5 (the Kanada ga: the low komal ga of Darbari Kanada)                       (microtonal)
+#   Kurd 2-4-4     Nahawand 4-2-4        Hijaz 2-6-2      Ajam 4-4-2                      (12-TET)
+# A PSYCH core is one jins twice; a JINS scale is two different ones, at least one of them microtonal.
+# Darbari keeps the Kanada ga here; PSYCH's Bhairav family replaced the Kanada family.
+
+scale J.KGL "KGLW" home B       # Bayati + neutral Hijaz on 5 (3-3-4 | 2-5-3). KGLW: K.G.L.W. (B)
+  up   0. 150. 300. 500. 700. 800. 1050.
+
+scale J.NRZ "Nairuz" home C     # Rast + Bayati on 5 (4-3-3 | 3-3-4). Arabic maqam Nairuz
+  up   0. 200. 350. 500. 700. 850. 1000.
+
+scale J.SZK "Suznak" home C     # Rast + Hijaz on 5 (4-3-3 | 2-6-2). Arabic maqam Suznak, equal-tempered
+  up   0. 200. 350. 500. 700. 800. 1100.
+
+scale J.HJR "HijazRst" home D   # Hijaz + Rast on 4 (2-6-2 | 3-3-4 on 5). Arabic maqam Hijaz, its other upper jins
+  up   0. 100. 400. 500. 700. 850. 1000.
+
+scale J.DRB "Darbari" home C    # Kanada + subminor on 5 (4-1-5 | 1-5-4): ga and dha both sung low with andolan
+  up   0. 200. 250. 500. 700. 750. 1000.

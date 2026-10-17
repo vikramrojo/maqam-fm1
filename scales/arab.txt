@@ -1,0 +1,63 @@
+# SLOOP scales: ARAB set (index 28..39)
+# Source: al-Sabbagh (1954) 24-tone ratios; degree structure after Touma, The Music of the Arabs,
+# and maqamworld.com. CHECK the ratios against the printed source before release.
+# Ratios from rast: zirguleh 16/15, dugah 9/8, kurdi 6/5, segah 102/83, nimbuselik 5/4,
+#   chahargah 4/3, hijaz 45/32, tikhijaz 729/512, nawa 3/2, hisar 189/118, husayni 27/16,
+#   ajam 883/490, awj 400/217, nimmahur 15/8.
+# Every value is written as a ratio from RAST (the maqam's note names are in the comment).
+# `from <ratio>` names the maqam's own tonic: the generator divides every value by it and
+# octave-reduces, so a maqam on dugah is relative to dugah. The first value is the tonic.
+
+scale RAST  "Rast" home C
+  from 1/1
+  up   1/1 9/8 102/83 4/3 3/2 27/16 400/217   # rast dugah segah chahargah nawa husayni awj
+  down 1/1 9/8 102/83 4/3 3/2 27/16 883/490   # rast dugah segah chahargah nawa husayni ajam
+
+scale BAYAT "Bayati" home D
+  from 9/8
+  up   9/8 102/83 4/3 3/2 27/16 883/490 1/1   # dugah segah chahargah nawa husayni ajam rast
+
+scale SABA  "Saba" home D
+  from 9/8
+  up   9/8 102/83 4/3 45/32 27/16 883/490 1/1   # dugah segah chahargah hijaz husayni ajam rast
+
+scale SIKAH "Sikah" home Ed
+  from 102/83
+  up   102/83 4/3 3/2 27/16 400/217 1/1 9/8   # segah chahargah nawa husayni awj rast dugah
+  down 102/83 4/3 3/2 27/16 883/490 1/1 9/8   # segah chahargah nawa husayni ajam rast dugah
+
+scale HIJAZ "Hijaz" home D
+  from 9/8
+  up   9/8 6/5 45/32 3/2 27/16 400/217 1/1   # dugah kurdi hijaz nawa husayni awj rast
+  down 9/8 6/5 45/32 3/2 27/16 883/490 1/1   # dugah kurdi hijaz nawa husayni ajam rast
+
+scale NAHAW "Nahawand" home C
+  from 1/1
+  up   1/1 9/8 6/5 4/3 3/2 189/118 15/8   # rast dugah kurdi chahargah nawa hisar nimmahur
+  down 1/1 9/8 6/5 4/3 3/2 189/118 883/490   # rast dugah kurdi chahargah nawa hisar ajam
+
+scale KURD  "Kurd" home D
+  from 9/8
+  up   9/8 6/5 4/3 3/2 27/16 883/490 1/1   # dugah kurdi chahargah nawa husayni ajam rast
+
+scale AJAM  "Ajam" home Bb
+  from 883/490
+  up   883/490 1/1 9/8 6/5 4/3 3/2 27/16   # ajam rast dugah kurdi chahargah nawa husayni
+
+scale NIKRZ "Nikriz" home C
+  from 1/1
+  up   1/1 9/8 6/5 729/512 3/2 27/16 883/490   # rast dugah kurdi tikhijaz nawa husayni ajam
+
+scale HJKAR "Hijazkar" home C
+  from 1/1
+  up   1/1 16/15 5/4 4/3 3/2 189/118 15/8   # rast zirguleh nimbuselik chahargah nawa hisar nimmahur
+
+scale SUZNK "Suznak" home C
+  from 1/1
+  up   1/1 9/8 102/83 4/3 3/2 189/118 15/8   # rast dugah segah chahargah nawa hisar nimmahur
+  down 1/1 9/8 102/83 4/3 3/2 27/16 883/490   # rast dugah segah chahargah nawa husayni ajam
+
+scale HUZAM "Huzam" home Ed
+  from 102/83
+  up   102/83 4/3 3/2 189/118 15/8 1/1 9/8   # segah chahargah nawa hisar nimmahur rast dugah
+  down 102/83 4/3 3/2 27/16 883/490 1/1 9/8   # segah chahargah nawa husayni ajam rast dugah
