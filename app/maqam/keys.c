@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */
-/* Key layouts (CHROM/SNAP/WHITE), direction, the OCT alt gesture and double-tap octave, key lights.
+/* Key layouts (CHROM/SNAP), direction, the OCT alt gesture and double-tap octave, key lights.
    Chooses note numbers only; the engine tunes them from the track's tables. */
 #include "maqam.h"
 #include "scales.h"
@@ -11,14 +11,12 @@ static uint8_t lay[GROOVE_TRACKS];
 static struct { int16_t last; uint32_t ms; uint8_t have, desc; } dir[GROOVE_TRACKS];
 static struct { uint8_t btn, valid; uint32_t ms; } tap;
 static int alt_track = -1;                              /* the OCT gesture */
-static uint32_t kalt[GROOVE_TRACKS];                    /* keys sounding an alt note */
 static struct { int scale, root, ok; int8_t key[24]; } cache = {-1, -1, 0, {0}};
 
 MAQAM_SMALL void maqam_keys_reset(void)
 {
     memset(lay, FOLLOW, sizeof lay);
     memset(dir, 0, sizeof dir);
-    memset(kalt, 0, sizeof kalt);
     tap.valid = 0;
 }
 
@@ -77,60 +75,6 @@ MAQAM_SMALL static unsigned snap(int base, unsigned pcs, unsigned desc)
     }
     return (unsigned)base;
 }
-/* The k-th used slot of mask m (0..23), -1 if it has fewer. */
-MAQAM_SMALL static int nth(uint32_t m, int k)
-{
-    for (int s = 0; s < 24; ++s)
-        if ((m >> s & 1U) && k-- == 0) return s;
-    return -1;
-}
-/* MIDI note for the pitch q quarter tones above the root's octave start (q mod 24 = the grid slot). */
-MAQAM_SMALL static unsigned tuned(const int8_t *key, unsigned root, int q, int octave)
-{
-    int p = (int)root + q, lo = C4 + maqam_fdiv(p, 2), hi = lo + (int)maqam_mod(p, 2);
-    int m = (int)maqam_mod(hi, 12) == key[maqam_mod(q, 24)] ? hi : lo;
-    m += 12 * octave;
-    return in_range(m) ? (unsigned)m : 128;
-}
-/* Black keys of an octave sit in gaps 0,1,3,4,5: gap g is between white key g and g+1. */
-MAQAM_SMALL static unsigned has_gap(int g) { return g >= 0 && g < 6 && (0x3BU >> g & 1U); }
-/* WHITE: the white keys walk the up form's degrees (root at C4). A degree only the down form has sits on a black
-   key next to the white key of its step; a black key left over plays the alt pitch of the white key to its left.
-   Returns the note, plus MAQAM_KEY_ALT for an alt note. Does not depend on direction. */
-MAQAM_SMALL static unsigned white(unsigned scale, unsigned root, const int8_t *key, unsigned key_index, int octave)
-{
-    static const int8_t idx[12] = {0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6};
-    int rel = (int)key_index - (C4 - KEY_BASE);         /* semitones above C4 at octave 0 */
-    int pc = (int)maqam_mod(rel, 12), o = maqam_fdiv(rel, 12);
-    int black = idx[pc] < 0, g = idx[black ? pc - 1 : pc];
-    uint32_t up = scale_up(&SCALES[scale]), down = scale_down(&SCALES[scale]);
-    if (!up) up = down;
-    int nu = (int)scale_popcount(up), nd = (int)scale_popcount(down), v[7], c[7];
-    if (!nu) return 128;
-    for (int i = 0; i < 7; ++i) {
-        int w = 7 * o + i, d = nd ? nth(down, (int)maqam_mod(w, nd)) : -1;
-        c[i] = -1;
-        if (d < 0 || (up >> d & 1U)) continue;
-        v[i] = 24 * maqam_fdiv(w, nd) + d;
-        int lower = v[i] < 24 * maqam_fdiv(w, nu) + nth(up, (int)maqam_mod(w, nu));
-        c[i] = lower ? i - 1 : i;                       /* lower: the left black key, higher: the right one */
-        if (!has_gap(c[i])) c[i] = lower ? i : i - 1;
-    }
-    for (int pass = 0; pass < 7; ++pass)                /* two variants on one black key: the one with no other black key keeps it */
-        for (int i = 0; i < 6; ++i)
-            if (c[i] == i && c[i + 1] == i) {
-                if (has_gap(i - 1) && !has_gap(i + 1)) c[i] = i - 1;
-                else c[i + 1] = i + 1;
-            }
-    if (!black) {
-        int w = 7 * o + g;
-        return tuned(key, root, 24 * maqam_fdiv(w, nu) + nth(up, (int)maqam_mod(w, nu)), octave);
-    }
-    for (int i = g; i <= g + 1; ++i)
-        if (c[i] == g) return tuned(key, root, v[i], octave);
-    unsigned n = white(scale, root, key, key_index - 1, octave);   /* left over: the alt of the white key to its left */
-    return n < 128 ? n | MAQAM_KEY_ALT : n;
-}
 
 MAQAM_SMALL unsigned maqam_key_note(unsigned track, unsigned key, int octave, unsigned desc)
 {
@@ -139,7 +83,6 @@ MAQAM_SMALL unsigned maqam_key_note(unsigned track, unsigned key, int octave, un
     unsigned scale, root, layout = maqam_layout(track);
     const int8_t *k = assignment(track, &scale, &root);
     if (!k || layout == MAQAM_CHROM) return groove_key_note(track, key, octave);
-    if (layout == MAQAM_WHITE) return white(scale, root, k, key, octave);
     return snap(base, pc_mask(k), desc);
 }
 MAQAM_SMALL unsigned maqam_key_press(unsigned track, unsigned key, int octave, uint32_t now)
@@ -166,17 +109,7 @@ MAQAM_SMALL uint32_t maqam_key_lights(unsigned track)
     return bits;
 }
 
-MAQAM_SMALL static void alt_sync(unsigned track) { maqam_engine_alt_hold(track, alt_track == (int)track || kalt[track]); }
-MAQAM_SMALL void maqam_key_alt(unsigned track, unsigned key, unsigned on)
-{
-    if (track >= GROOVE_TRACKS) return;
-    kalt[track] = on ? kalt[track] | 1U << key : kalt[track] & ~(1U << key);
-    alt_sync(track);
-}
-MAQAM_SMALL void maqam_key_alt_clear(void)
-{
-    for (unsigned t = 0; t < GROOVE_TRACKS; ++t) { kalt[t] = 0; alt_sync(t); }
-}
+MAQAM_SMALL static void alt_sync(unsigned track) { maqam_engine_alt_hold(track, alt_track == (int)track); }
 
 MAQAM_SMALL unsigned maqam_oct_buttons(unsigned track, unsigned active, unsigned held, unsigned pressed,
                            unsigned key_down, uint32_t now, int *octave)

@@ -73,7 +73,7 @@ int main(void)
     enc(1, 1); ms(300);
     snap("17_track_follow");
     enc(2, 1); enc(3, 1); ms(300);
-    snap("18_track_own_white");
+    snap("18_track_own_chrom");
     {
         struct groove_tuning t;
         groove_tuning_get(1, &t);

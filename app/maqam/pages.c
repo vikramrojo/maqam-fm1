@@ -52,7 +52,7 @@ MAQAM_SMALL static unsigned key_pc(uint32_t keys)
         if (keys >> k & 1U) return (KEY_BASE + k) % 12U;
     return 12;
 }
-static const char *const layout_name[3] = {"SNAP", "WHITE", "CHROM"};            /* by MAQAM_* value */
+static const char *const layout_name[2] = {"SNAP", "CHROM"};            /* by MAQAM_* value */
 
 /* The track's scale and root for editing: its own, or the project's when its table is CUSTOM. */
 MAQAM_SMALL static void track_base(unsigned t, unsigned *s, unsigned *r)
@@ -81,7 +81,7 @@ MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t k
     }
     if (pc < 12) sel = pc;                                 /* a key played on the TRACK page is the alt key */
     if (d[1]) {                                            /* layouts are numbered in display order */
-        int l = clampi(maqam_layout_raw(t) + d[1], 0, 2);
+        int l = clampi(maqam_layout_raw(t) + d[1], 0, 1);
         if (mel && maqam_overridden(t)) maqam_set_layout(t, l);
         else maqam_set_default_layout((unsigned)l);
     }

@@ -475,30 +475,33 @@ static void layouts(void)
     maqam_page_view(0, &v);
     CHECK(maqam_default_layout() == MAQAM_SNAP && maqam_layout_raw(0) == MAQAM_SNAP);
     has("KEYS knob", v.knob[1][0], "KEYS");
-    enc(3, 1);                                   /* K2 on a following track: the project layout, SNAP -> WHITE */
-    CHECK(maqam_default_layout() == MAQAM_WHITE && maqam_layout(0) == MAQAM_WHITE && maqam_layout(1) == MAQAM_WHITE);
+    enc(3, 1);                                   /* K2 on a following track: the project layout, SNAP -> CHROM */
+    CHECK(maqam_default_layout() == MAQAM_CHROM && maqam_layout(0) == MAQAM_CHROM && maqam_layout(1) == MAQAM_CHROM);
     enc(3, 5);                                   /* clamps at CHROM */
     CHECK(maqam_default_layout() == MAQAM_CHROM);
     enc(3, -1);
-    CHECK(maqam_default_layout() == MAQAM_WHITE);
+    CHECK(maqam_default_layout() == MAQAM_SNAP);
+    enc(3, 1);
     maqam_page_view(0, &v);
-    has("layout value", v.knob[1][1], "WHITE");
+    has("layout value", v.knob[1][1], "CHROM");
     /* track 2 goes OWN: its layout starts as a copy of the project's */
     sel_track(1);
     enc(2, 1);
-    CHECK(maqam_overridden(1) && maqam_layout_raw(1) == MAQAM_WHITE);
-    enc(3, 1);                                   /* its own layout only */
-    CHECK(maqam_layout(1) == MAQAM_CHROM && maqam_default_layout() == MAQAM_WHITE && maqam_layout(0) == MAQAM_WHITE);
+    CHECK(maqam_overridden(1) && maqam_layout_raw(1) == MAQAM_CHROM);
+    enc(3, -1);                                  /* its own layout only */
+    CHECK(maqam_layout(1) == MAQAM_SNAP && maqam_default_layout() == MAQAM_CHROM && maqam_layout(0) == MAQAM_CHROM);
     maqam_page_view(1, &v);
-    has("own layout value", v.knob[1][1], "CHROM");
+    has("own layout value", v.knob[1][1], "SNAP");
     sel_track(0);                                /* the project layout changes: the own layout stays */
     enc(3, -9);
-    CHECK(maqam_default_layout() == MAQAM_SNAP && maqam_layout(1) == MAQAM_CHROM && maqam_layout(0) == MAQAM_SNAP);
+    CHECK(maqam_default_layout() == MAQAM_SNAP && maqam_layout(1) == MAQAM_SNAP && maqam_layout(0) == MAQAM_SNAP);
+    enc(3, 9);
+    CHECK(maqam_default_layout() == MAQAM_CHROM && maqam_layout(1) == MAQAM_SNAP && maqam_layout(0) == MAQAM_CHROM);
     sel_track(1);
     enc(2, -1);                                  /* FOLLOW: the project layout again */
-    CHECK(!maqam_overridden(1) && maqam_layout(1) == MAQAM_SNAP);
+    CHECK(!maqam_overridden(1) && maqam_layout(1) == MAQAM_CHROM);
     enc(2, 1);                                   /* OWN again: a fresh copy */
-    CHECK(maqam_layout_raw(1) == MAQAM_SNAP);
+    CHECK(maqam_layout_raw(1) == MAQAM_CHROM);
     printf("layouts: K2 edits the project layout when following, the track's own when OWN (copied on OWN)\n");
 }
 
@@ -770,7 +773,7 @@ static void pixels(void)
     enc(1, 1);
     ms(300);
     shot("track_follow");
-    enc(2, 1); enc(3, 1);                            /* OWN, its own layout WHITE */
+    enc(2, 1); enc(3, 1);                            /* OWN, its own layout CHROM */
     key(11);
     enc(5, -100);
     ms(300);
