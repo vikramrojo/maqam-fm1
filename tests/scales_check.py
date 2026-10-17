@@ -70,9 +70,15 @@ def spread(m):
 
 
 def tune_of(r):
-    """Grid offsets (cents from the slot) derived from the exact cents_x10."""
-    return [G.rnd(c / 10.0 - 50.0 * i) if (c or i == 0) and (r["up"] | r["down"]) >> i & 1 else 0
-            for i, c in enumerate(r["cents_x10"])]
+    """Whole-cent grid offsets, recomputed here from the exact cents (and compared with the header's off[])."""
+    return [G.rnd(c - 50.0 * i) if (c or i == 0) and (r["up"] | r["down"]) >> i & 1 else 0
+            for i, c in enumerate(r["exact"])]
+
+
+def wrap_f(v):
+    """Signed remainder of a (float) cents value in [-600, 600)."""
+    v %= 1200.0
+    return v - 1200.0 if v >= 600.0 else v
 
 
 def main():
@@ -113,6 +119,26 @@ def main():
         chk(by[c]["home"] == G.home_pc(h), f"{c} home")
     # exact cents: unused slots are 0, used slots within the grid, ARAB Rast's third is 356.9 c
     chk(by["RAST"]["cents_x10"][7] == 3569, f"RAST slot 7 = {by['RAST']['cents_x10'][7]}")
+    chk(abs(by["RAST"]["exact"][7] - 356.9) < 0.05 and by["RAST"]["off"][7] == 7, "RAST slot 7: exact 356.9 c, header +7")
+    for r in res:
+        chk(r["off"] == tune_of(r) and all(-127 <= o <= 127 for o in r["off"]), f"{r['code']} off[] = rounded exact - grid")
+    # TRAD tables from the whole-cent offsets (what the firmware does) equal tables rounded from the exact cents:
+    # 73 scales x 24 roots x EQUAL/TRAD. Ties are excluded by the generator (0.001 c margin).
+    def wrap(v, m):
+        v %= m
+        return v - m if v >= m // 2 else v
+    pairs = 0
+    for r in res:
+        for root in range(24):
+            k = G.assign_keys(r["up"] | r["down"], root)
+            for s, key in k.items():
+                eq = wrap(root * 50 + s * 50 - key * 100, 1200)
+                chk(eq == G.rnd(wrap_f(root * 50 + s * 50 - key * 100)), f"{r['code']} {root} {s} EQUAL")
+                new = wrap(root * 50 + s * 50 + r["off"][s] - key * 100, 1200)
+                ex = G.rnd(wrap_f(root * 50 + r["exact"][s] - key * 100))
+                chk(new == ex, f"{r['code']} root {root} slot {s} TRAD: offsets {new} != exact {ex}")
+                pairs += 1
+    chk(pairs > 0, "TRAD/EQUAL identity compared")
     for r in res:
         used = r["up"] | r["down"]
         chk(all((r["cents_x10"][i] != 0) == bool(used >> i & 1 and i) for i in range(24)),
@@ -134,7 +160,8 @@ def main():
     chk((k[7], k[21], k[20]) == (4, 11, 10), f"Rast on C: E-half-flat->E, B-half-flat->B, Bb->A#: {k}")
     # negative fixtures: must fail with rc 1 and a message naming the scale / reason
     for sub, who, why in (("removed", "MIN", "missing"), ("collide", "MAJ", "exact pitches"),
-                          ("midpoint", "MIDPT", "midpoint"), ("badcode", "TOOLONG", "longer than 5"),
+                          ("midpoint", "MIDPT", "midpoint"),
+                          ("tie", "TIEC", "rounding tie"), ("badcode", "TOOLONG", "longer than 5"),
                           ("fit13", "FIT13", "does not fit 12 keys")):
         d = ROOT / "tests" / "scales_bad" / sub
         p = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_scales.py"), "--print", "--dir", str(d)],

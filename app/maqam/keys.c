@@ -13,18 +13,18 @@ static struct { uint8_t btn, valid; uint32_t ms; } tap;
 static int alt_track = -1;
 static struct { int scale, root, ok; int8_t key[24]; } cache = {-1, -1, 0, {0}};
 
-void maqam_keys_reset(void)
+MAQAM_SMALL void maqam_keys_reset(void)
 {
     memset(lay, FOLLOW, sizeof lay);
     memset(dir, 0, sizeof dir);
     tap.valid = 0;
 }
 
-static int fdiv(int a, int b) { int q = a / b; return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q; }
-static unsigned popcount(uint32_t v) { unsigned n = 0; for (; v; v &= v - 1) ++n; return n; }
+MAQAM_SMALL static int fdiv(int a, int b) { int q = a / b; return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q; }
+MAQAM_SMALL static unsigned popcount(uint32_t v) { unsigned n = 0; for (; v; v &= v - 1) ++n; return n; }
 
 /* Assignment for the track, or NULL for drum, CUSTOM and chromatic tracks (they play every key). */
-static const int8_t *assignment(unsigned track, unsigned *scale, unsigned *root)
+MAQAM_SMALL static const int8_t *assignment(unsigned track, unsigned *scale, unsigned *root)
 {
     if (!maqam_melodic(track)) return 0;
     unsigned s = maqam_track_scale(track), r = maqam_track_root(track);
@@ -40,7 +40,7 @@ static const int8_t *assignment(unsigned track, unsigned *scale, unsigned *root)
     *scale = s; *root = r;
     return cache.key;
 }
-static unsigned pc_mask(const int8_t *key)
+MAQAM_SMALL static unsigned pc_mask(const int8_t *key)
 {
     unsigned m = 0;
     for (unsigned i = 0; i < 24; ++i)
@@ -48,25 +48,25 @@ static unsigned pc_mask(const int8_t *key)
     return m;
 }
 
-unsigned maqam_layout(unsigned track)
+MAQAM_SMALL unsigned maqam_layout(unsigned track)
 {
     unsigned s, r;
     if (track >= GROOVE_TRACKS || !assignment(track, &s, &r)) return MAQAM_CHROM;
     return lay[track] == FOLLOW ? maqam_default_layout() : lay[track];
 }
-int maqam_set_layout(unsigned track, int layout)
+MAQAM_SMALL int maqam_set_layout(unsigned track, int layout)
 {
     if (track >= GROOVE_TRACKS || layout > MAQAM_WHITE || layout < -1) return -1;
     lay[track] = layout < 0 ? FOLLOW : (uint8_t)layout;
     return 0;
 }
 
-int maqam_layout_raw(unsigned track) { return track < GROOVE_TRACKS && lay[track] != FOLLOW ? lay[track] : -1; }
-unsigned maqam_last_descending(unsigned track) { return track < GROOVE_TRACKS && dir[track].have && dir[track].desc; }
+MAQAM_SMALL int maqam_layout_raw(unsigned track) { return track < GROOVE_TRACKS && lay[track] != FOLLOW ? lay[track] : -1; }
+MAQAM_SMALL unsigned maqam_last_descending(unsigned track) { return track < GROOVE_TRACKS && dir[track].have && dir[track].desc; }
 
-static unsigned in_range(int m) { return m >= 0 && m <= 127; }
+MAQAM_SMALL static unsigned in_range(int m) { return m >= 0 && m <= 127; }
 
-static unsigned snap(int base, unsigned pcs, unsigned desc)
+MAQAM_SMALL static unsigned snap(int base, unsigned pcs, unsigned desc)
 {
     for (int d = 0; d < 12; ++d) {
         int m = base + (desc ? -d : d);
@@ -74,7 +74,7 @@ static unsigned snap(int base, unsigned pcs, unsigned desc)
     }
     return (unsigned)base;
 }
-static unsigned white(unsigned scale, unsigned root, const int8_t *key, unsigned key_index, int octave,
+MAQAM_SMALL static unsigned white(unsigned scale, unsigned root, const int8_t *key, unsigned key_index, int octave,
                       unsigned desc)
 {
     static const int8_t idx[12] = {0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6};
@@ -82,7 +82,7 @@ static unsigned white(unsigned scale, unsigned root, const int8_t *key, unsigned
     int pc = ((rel % 12) + 12) % 12;
     if (idx[pc] < 0) return 128;                        /* black key */
     int w = 7 * fdiv(rel, 12) + idx[pc];
-    uint32_t up = SCALES[scale].up, down = SCALES[scale].down;
+    uint32_t up = scale_up(&SCALES[scale]), down = scale_down(&SCALES[scale]);
     uint32_t layout = popcount(down) > popcount(up) ? down : up, cur = desc ? down : up;
     int n = (int)popcount(layout), deg = ((w % n) + n) % n, oct = fdiv(w, n), slot = 0;
     for (int s = 0, seen = 0; s < 24; ++s)
@@ -101,7 +101,7 @@ static unsigned white(unsigned scale, unsigned root, const int8_t *key, unsigned
     return in_range(m) ? (unsigned)m : 128;
 }
 
-unsigned maqam_key_note(unsigned track, unsigned key, int octave, unsigned desc)
+MAQAM_SMALL unsigned maqam_key_note(unsigned track, unsigned key, int octave, unsigned desc)
 {
     int base = KEY_BASE + (int)key + octave * 12;
     base = base < 0 ? 0 : base > 127 ? 127 : base;
@@ -111,7 +111,7 @@ unsigned maqam_key_note(unsigned track, unsigned key, int octave, unsigned desc)
     if (layout == MAQAM_WHITE) return white(scale, root, k, key, octave, desc);
     return snap(base, pc_mask(k), desc);
 }
-unsigned maqam_key_press(unsigned track, unsigned key, int octave, uint32_t now)
+MAQAM_SMALL unsigned maqam_key_press(unsigned track, unsigned key, int octave, uint32_t now)
 {
     if (track >= GROOVE_TRACKS) return groove_key_note(track, key, octave);
     unsigned d = dir[track].desc;
@@ -123,7 +123,7 @@ unsigned maqam_key_press(unsigned track, unsigned key, int octave, uint32_t now)
     return maqam_key_note(track, key, octave, d);
 }
 
-uint32_t maqam_key_lights(unsigned track)
+MAQAM_SMALL uint32_t maqam_key_lights(unsigned track)
 {
     unsigned s, r;
     const int8_t *k = assignment(track, &s, &r);
@@ -135,7 +135,7 @@ uint32_t maqam_key_lights(unsigned track)
     return bits;
 }
 
-unsigned maqam_oct_buttons(unsigned track, unsigned active, unsigned held, unsigned pressed,
+MAQAM_SMALL unsigned maqam_oct_buttons(unsigned track, unsigned active, unsigned held, unsigned pressed,
                            unsigned key_down, uint32_t now, int *octave)
 {
     unsigned own = active && maqam_melodic(track);

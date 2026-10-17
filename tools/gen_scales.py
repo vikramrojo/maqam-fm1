@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-# Ported from maqam-dev (GPL-3.0) and adapted for FM1 Open: exact cents_x10 output, per-root key assignment.
+# Ported from maqam-dev (GPL-3.0) and adapted for FM1 Open: whole-cent grid offsets, per-root key assignment.
 """Scale table generator: scales/*.txt -> app/maqam/scales.h (scale_def_t SCALES[]).
 
 usage: gen_scales.py OUT.h            write the header and OUT.c (the data, one copy)
@@ -25,9 +25,13 @@ step per quarter tone), a display hint only.
 
 Each value is assigned to the nearest 50 c grid slot (mod 24), rounding half away from zero; a
 value within 1e-6 c of a grid midpoint (25 c mod 50) is an error, so no result depends on
-tie-breaking. The header stores, per scale, cents_x10[24]: the exact pitch above the tonic in
-tenths of a cent for every used slot, 0 for unused slots. Both forms of a scale share one
-cents_x10[24]: two degrees on one slot must agree to within 0.05 c, else it is an error.
+tie-breaking. The generator computes the exact pitch above the tonic of every used slot (--print
+shows it to 0.1 c). The header stores, per scale, off[24]: that exact pitch minus the slot's grid
+pitch (slot * 50 c), rounded half away from zero to whole cents (int8), 0 for unused slots. Both
+forms of a scale share one off[24]: two degrees on one slot must agree to within 0.05 c, else it
+is an error. An exact remainder within 0.001 c of a .5 tie is an error naming the scale, so
+rounding the offset first and rounding the sum later can never differ. up/down are stored as
+three little-endian bytes each.
 
 KEY ASSIGNMENT (the C port in app/maqam/ MUST implement exactly this; the generator proves
 that every scale fits at every root, but does not emit per-root tables):
@@ -126,7 +130,8 @@ def parse_file(path, setname):
 
 
 def build(sc):
-    """-> (up mask, down mask, cents_x10[24] list, home pc); raises Err naming the scale."""
+    """-> (up mask, down mask, exact cents[24] (float, 0.0 unused), off[24] whole-cent grid offsets, home pc);
+    raises Err naming the scale."""
     code = sc["code"]
 
     def fail(msg):
@@ -147,6 +152,7 @@ def build(sc):
     except ValueError as e:
         fail(str(e))
     exact = {}      # slot -> exact cents above the tonic
+    offs = {}       # slot -> whole-cent offset from the grid
     masks = []
     for form in ("up", "down"):
         vals = sc[form] if sc[form] is not None else sc["up"]
@@ -165,12 +171,19 @@ def build(sc):
             if abs(q - math.floor(q) - 0.5) < 1e-6 / 50:
                 fail(f"{form}: value {tok} ({c:.4f} c) is on a grid midpoint")
             slot = rnd(q) % 24
-            off = rnd(c - 50.0 * rnd(q))
+            rem = c - 50.0 * rnd(q)       # exact offset from the grid slot
+            if abs(abs(rem) - math.floor(abs(rem)) - 0.5) < 0.001:
+                fail(f"{form}: value {tok} is {c:.4f} c, its offset {rem:+.4f} c from the grid is within 0.001 c of a "
+                     f"whole-cent rounding tie")
+            off = rnd(rem)
             if abs(off) > 63:
                 fail(f"{form}: value {tok} is {off:+d} c from slot {slot} (limit 63)")
             if slot in exact and abs(exact[slot] - c) > 0.05:
                 fail(f"slot {slot} has exact pitches {exact[slot]:.2f} and {c:.2f} c ({form} value {tok})")
+            if slot in offs and offs[slot] != off:
+                fail(f"slot {slot}: both forms give different whole-cent offsets {offs[slot]:+d} and {off:+d}")
             exact.setdefault(slot, c)
+            offs[slot] = off
             mask |= 1 << slot
         n = bin(mask).count("1")
         if not 5 <= n <= 12:
@@ -178,7 +191,7 @@ def build(sc):
         if not mask & 1:
             fail(f"{form}: slot 0 (the tonic) missing")
         masks.append(mask)
-    return masks[0], masks[1], [rnd(exact[i] * 10.0) if i in exact else 0 for i in range(24)], home
+    return (masks[0], masks[1], [exact.get(i, 0.0) for i in range(24)], [offs.get(i, 0) for i in range(24)], home)
 
 
 def assign_keys(mask, root):
@@ -229,13 +242,14 @@ def load(d):
     out = [by[c] for c in FROZEN] + [sc for sc in out if sc["code"] not in FROZEN]
     res = []
     for sc in out:
-        up, down, c10, home = build(sc)
+        up, down, ex, off, home = build(sc)
         for root in range(24):
             if assign_keys(up | down, root) is None:
                 raise Err(f"{sc['src']}: scale {sc['code']}: does not fit 12 keys at root {root} "
                           f"({bin(up | down).count('1')} grid positions across up and down)")
         res.append(dict(code=sc["code"], name=sc["name"], set=SETS.index(sc["set"]), home=home,
-                        up=up, down=down, cents_x10=c10))
+                        up=up, down=down, exact=ex, off=off,
+                        cents_x10=[rnd(e * 10.0) for e in ex]))   # exact pitch in 0.1 c, for --print and tests only
     return res
 
 
@@ -245,9 +259,14 @@ def emit(res):
          "/* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */",
          "#ifndef MAQAM_SCALES_H", "#define MAQAM_SCALES_H",
          "#include <stdint.h>", "",
-         "/* up/down: 24-bit masks of used grid slots (bit i = i quarter tones above the tonic).",
-         "   cents_x10[i]: exact pitch of slot i above the tonic in 0.1 c; 0 for unused slots. */",
-         "typedef struct { char code[6]; char name[9]; uint8_t set, home; uint32_t up, down; int16_t cents_x10[24]; } scale_def_t;",
+         "/* up/down: 24-bit masks of used grid slots, little-endian bytes (bit i = i quarter tones above the tonic).",
+         "   off[i]: pitch of slot i above the tonic minus the grid pitch i * 50 c, whole cents; 0 for unused slots.",
+         "   No padding: 47 bytes. */",
+         "typedef struct { char code[6]; char name[9]; uint8_t set, home; uint8_t up[3], down[3]; int8_t off[24]; } scale_def_t;",
+         "static inline uint32_t scale_up(const scale_def_t *s) { return s->up[0] | (uint32_t)s->up[1] << 8 | (uint32_t)s->up[2] << 16; }",
+         "static inline uint32_t scale_down(const scale_def_t *s) { return s->down[0] | (uint32_t)s->down[1] << 8 | (uint32_t)s->down[2] << 16; }",
+         "/* Whole cents above the tonic of grid slot `slot` (0..23); meaningful for used slots. */",
+         "static inline int scale_cents(const scale_def_t *s, unsigned slot) { return (int)slot * 50 + s->off[slot]; }",
          "enum { " + ", ".join(f"SET_{s}" for s in SETS) + ", NSETS };",
          f"#define NSCALES {len(res)}",
          "/* defined once in scales.c */",
@@ -261,9 +280,10 @@ def emit(res):
          "const char *const SET_NAMES[NSETS] = { " + ", ".join(f'"{s}"' for s in SETS) + " };", "",
          "const scale_def_t SCALES[NSCALES] = {"]
     for r in res:
-        C.append('    {"%s", "%s", SET_%s, %d, 0x%06Xu, 0x%06Xu, {%s}},' % (
-            r["code"], r["name"], SETS[r["set"]], r["home"], r["up"], r["down"],
-            ",".join(str(t) for t in r["cents_x10"])))
+        C.append('    {"%s", "%s", SET_%s, %d, {0x%02X,0x%02X,0x%02X}, {0x%02X,0x%02X,0x%02X}, {%s}},' % (
+            (r["code"], r["name"], SETS[r["set"]], r["home"])
+            + tuple(r["up"] >> (8 * i) & 255 for i in range(3)) + tuple(r["down"] >> (8 * i) & 255 for i in range(3))
+            + (",".join(str(t) for t in r["off"]),)))
     C += ["};", "", "const char *const SCALE_CODES[NSCALES] = {"]
     C += ["    " + ", ".join("SCALES[%d].code" % i for i in range(r, min(r + 6, len(res)))) + "," for r in range(0, len(res), 6)]
     C += ["};", ""]

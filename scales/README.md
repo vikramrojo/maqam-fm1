@@ -20,7 +20,7 @@ scale CODE "Name" home <note>
 - `from <value>` names the scale's own tonic when the values are written from another note (ARAB rows are written as ratios from Rast; Bayati says `from 9/8`). Every value is divided by it and reduced into one octave.
 - 5 to 12 degrees, the tonic in both forms.
 
-How the generator reads a value: it rounds it to the nearest quarter tone (50 cents) of the 24-note grid, which sets that degree in the scale's mask, and keeps the remainder (at most ±25 cents) as that degree's *tuning offset*. TRADITIONAL intonation adds the offset at note-on; EQUAL ignores it. Both forms of a scale share one offset per grid position, so the build fails if two pitches land on the same position with different offsets.
+How the generator reads a value: it rounds it to the nearest quarter tone (50 cents) of the 24-note grid, which sets that degree in the scale's mask, and keeps the remainder (at most ±25 cents) as that degree's *tuning offset*, rounded to whole cents in the generated table (`off[24]`, exact cents stay in `--print`). TRADITIONAL intonation adds the offset at note-on; EQUAL ignores it. Both forms of a scale share one offset per grid position, so the build fails if two pitches land on the same position with different offsets.
 
 By set (the convention of the files, kept in each file's header comment):
 
@@ -35,7 +35,7 @@ By set (the convention of the files, kept in each file's header comment):
 
 - **Append only.** A scale's index is saved in projects, so existing scales never move. The generator holds the frozen list of the 73 shipped scales (`FROZEN` in `tools/gen_scales.py`): they keep their indices whatever the line order in the files, and removing or renaming one is a build error that names it. **Add a new scale to any set's file**: it gets the next free index (73, 74, ...) and belongs to that file's set. Once a new scale ships, add its code to the end of `FROZEN`.
 - **Cite the source** of every new row in a comment (a book, a page, a website, a recording): ratios and cents need to be checkable.
-- The build fails, naming the file, line and scale, for: a value exactly halfway between two quarter-tone steps (the rounding would be ambiguous: nudge it by a cent or write it as a ratio), two different exact pitches on one grid position, a scale whose two forms together cannot be assigned to 12 distinct keys at some root (the error names the scale and root), a code over 5 characters or a repeated code, fewer than 5 or more than 12 degrees, or a tonic missing from a form.
+- The build fails, naming the file, line and scale, for: a value exactly halfway between two quarter-tone steps, or whose offset from its step is within 0.001 cent of a half cent (the rounding would be ambiguous: nudge it by a cent or write it as a ratio), two different exact pitches on one grid position, a scale whose two forms together cannot be assigned to 12 distinct keys at some root (the error names the scale and root), a code over 5 characters or a repeated code, fewer than 5 or more than 12 degrees, or a tonic missing from a form.
 
 ## Check
 

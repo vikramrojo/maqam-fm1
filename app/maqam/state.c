@@ -9,33 +9,33 @@ static struct {
     uint8_t tscale[GROOVE_TRACKS], troot[GROOVE_TRACKS];   /* a track's own scale, valid if its over bit is set */
 } st = {0, 0, 1, 0, 0, {0}, {0}};
 
-void maqam_init(void) { memset(&st, 0, sizeof st); st.trad = 1; maqam_keys_reset(); maqam_page_save_result(0); }
-unsigned maqam_default_layout(void) { return st.layout; }
-int maqam_set_default_layout(unsigned l)
+MAQAM_SMALL void maqam_init(void) { memset(&st, 0, sizeof st); st.trad = 1; maqam_keys_reset(); maqam_page_save_result(0); }
+MAQAM_SMALL unsigned maqam_default_layout(void) { return st.layout; }
+MAQAM_SMALL int maqam_set_default_layout(unsigned l)
 {
     if (l > MAQAM_WHITE) return -1;
     if (st.layout != l) { st.layout = (uint8_t)l; maqam_engine_touch(); }
     return 0;
 }
-unsigned maqam_project_scale(void) { return st.scale; }
-unsigned maqam_project_root(void) { return st.root; }
-unsigned maqam_trad(void) { return st.trad; }
-unsigned maqam_melodic(unsigned t)
+MAQAM_SMALL unsigned maqam_project_scale(void) { return st.scale; }
+MAQAM_SMALL unsigned maqam_project_root(void) { return st.root; }
+MAQAM_SMALL unsigned maqam_trad(void) { return st.trad; }
+MAQAM_SMALL unsigned maqam_melodic(unsigned t)
 {
     if (t >= GROOVE_TRACKS || t == 7) return 0;
     unsigned s = groove_source_type(t);
     return s != GROOVE_808 && s != GROOVE_SAMPLE;
 }
-unsigned maqam_overridden(unsigned t) { return t < GROOVE_TRACKS && (st.over >> t & 1U); }
-unsigned maqam_track_scale(unsigned t) { return maqam_overridden(t) ? st.tscale[t] : st.scale; }
-unsigned maqam_track_root(unsigned t)
+MAQAM_SMALL unsigned maqam_overridden(unsigned t) { return t < GROOVE_TRACKS && (st.over >> t & 1U); }
+MAQAM_SMALL unsigned maqam_track_scale(unsigned t) { return maqam_overridden(t) ? st.tscale[t] : st.scale; }
+MAQAM_SMALL unsigned maqam_track_root(unsigned t)
 {
     if (!maqam_overridden(t)) return st.root;
     return st.tscale[t] == MAQAM_CUSTOM ? 0 : st.troot[t];
 }
 
 /* Push scale/root to a track. reset: replace the alt table with the defaults; else keep it. */
-static int apply(unsigned t, unsigned scale, unsigned root, unsigned reset)
+MAQAM_SMALL static int apply(unsigned t, unsigned scale, unsigned root, unsigned reset)
 {
     struct groove_tuning g;
     maqam_engine_get(t, &g);
@@ -45,14 +45,14 @@ static int apply(unsigned t, unsigned scale, unsigned root, unsigned reset)
     return maqam_engine_set(t, &g);
 }
 /* Retune a track to (scale, root); alt edits survive unless the scale or root actually changes. */
-static int retune(unsigned t, unsigned scale, unsigned root)
+MAQAM_SMALL static int retune(unsigned t, unsigned scale, unsigned root)
 {
     unsigned same = maqam_track_scale(t) == scale && maqam_track_root(t) == root;
     return apply(t, scale, root, !same);
 }
-static int ok_pick(unsigned scale, unsigned root) { return scale < maqam_scale_count() && root < 24; }
+MAQAM_SMALL static int ok_pick(unsigned scale, unsigned root) { return scale < maqam_scale_count() && root < 24; }
 
-int maqam_set_project(unsigned scale, unsigned root)
+MAQAM_SMALL int maqam_set_project(unsigned scale, unsigned root)
 {
     if (!ok_pick(scale, root)) return -1;
     int r = 0;
@@ -62,7 +62,7 @@ int maqam_set_project(unsigned scale, unsigned root)
     st.root = (uint8_t)root;
     return r;
 }
-int maqam_set_intonation(unsigned trad)
+MAQAM_SMALL int maqam_set_intonation(unsigned trad)
 {
     int r = 0;
     st.trad = trad ? 1 : 0;
@@ -72,7 +72,7 @@ int maqam_set_intonation(unsigned trad)
     }
     return r;
 }
-int maqam_set_override(unsigned t, unsigned scale, unsigned root)
+MAQAM_SMALL int maqam_set_override(unsigned t, unsigned scale, unsigned root)
 {
     if (!maqam_melodic(t) || !ok_pick(scale, root)) return -1;
     int r = retune(t, scale, root);
@@ -82,14 +82,14 @@ int maqam_set_override(unsigned t, unsigned scale, unsigned root)
     st.troot[t] = (uint8_t)root;
     return 0;
 }
-int maqam_clear_override(unsigned t)
+MAQAM_SMALL int maqam_clear_override(unsigned t)
 {
     if (!maqam_overridden(t)) return 0;
     int r = retune(t, st.scale, st.root);
     if (!r) st.over &= (uint8_t)~(1U << t);
     return r;
 }
-int maqam_set_alt(unsigned t, unsigned key, int cents)
+MAQAM_SMALL int maqam_set_alt(unsigned t, unsigned key, int cents)
 {
     struct groove_tuning g;
     if (!maqam_melodic(t) || key >= GROOVE_TUNING_KEYS || cents < -127 || cents > 127) return -1;
@@ -99,13 +99,13 @@ int maqam_set_alt(unsigned t, unsigned key, int cents)
 }
 
 /* ---- persistence ---- */
-static uint8_t check(const uint8_t *t)
+MAQAM_SMALL static uint8_t check(const uint8_t *t)
 {
     uint8_t x = 0;
     for (unsigned i = 0; i < MAQAM_TRAILER_BYTES - 1; ++i) x ^= t[i];
     return (uint8_t)~x;
 }
-void maqam_project_save(uint8_t t[MAQAM_TRAILER_BYTES])
+MAQAM_SMALL void maqam_project_save(uint8_t t[MAQAM_TRAILER_BYTES])
 {
     t[0] = MAQAM_TRAILER_TAG;
     t[1] = st.scale;
@@ -115,14 +115,14 @@ void maqam_project_save(uint8_t t[MAQAM_TRAILER_BYTES])
     t[5] = t[6] = 0;
     t[7] = check(t);
 }
-static int trailer_ok(const uint8_t *t)
+MAQAM_SMALL static int trailer_ok(const uint8_t *t)
 {
     return t && t[0] == MAQAM_TRAILER_TAG && t[7] == check(t) && t[1] < maqam_scale_count() && t[2] < 24 &&
            !(t[3] & ~7U) && (t[3] >> 1 & 3U) < 3 && !t[5] && !t[6];
 }
 /* The engine tables decide: a track whose main table is not the project scale's gets its own label by
    matching the library (first hit in index order), else CUSTOM, and its tables are left untouched. */
-void maqam_project_loaded(const uint8_t *t)
+MAQAM_SMALL void maqam_project_loaded(const uint8_t *t)
 {
     struct groove_tuning g[GROOVE_TRACKS];
     int8_t want[GROOVE_TUNING_KEYS];
@@ -144,7 +144,7 @@ void maqam_project_loaded(const uint8_t *t)
         st.troot[i] = (uint8_t)r;
     }
 }
-void maqam_refresh(void)
+MAQAM_SMALL void maqam_refresh(void)
 {
     uint8_t t[MAQAM_TRAILER_BYTES];
     int8_t m[GROOVE_TUNING_KEYS];

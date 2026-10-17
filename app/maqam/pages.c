@@ -11,21 +11,21 @@ static unsigned sub, sel;                                   /* sub-page; selecte
 
 static unsigned no_space;                                   /* the last save could not store tuning */
 
-void maqam_page_open(void) { sub = SUB_PROJECT; sel = 0; }
-void maqam_page_save_result(int r)
+MAQAM_SMALL void maqam_page_open(void) { sub = SUB_PROJECT; sel = 0; }
+MAQAM_SMALL void maqam_page_save_result(int r)
 {
     if (r == 0 || r == GROOVE_PROJECT_TUNING_SPACE) no_space = r != 0;
 }
 
 /* ---- small helpers ---- */
-static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
-static unsigned wrap24(int v) { return (unsigned)(((v % 24) + 24) % 24); }
-static unsigned set_first(unsigned set)
+MAQAM_SMALL static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
+MAQAM_SMALL static unsigned wrap24(int v) { return (unsigned)(((v % 24) + 24) % 24); }
+MAQAM_SMALL static unsigned set_first(unsigned set)
 {
     for (unsigned i = 0; i < NSCALES; ++i) if (SCALES[i].set == set) return i;
     return 0;
 }
-static unsigned set_len(unsigned set)
+MAQAM_SMALL static unsigned set_len(unsigned set)
 {
     unsigned n = 0;
     for (unsigned i = 0; i < NSCALES; ++i) n += SCALES[i].set == set;
@@ -33,7 +33,7 @@ static unsigned set_len(unsigned set)
 }
 /* Move to another set (jumps to that set's first scale; clamped at the ends) and/or around the scales of the
    current set (wraps). */
-static unsigned step_scale(unsigned s, int dset, int dscale)
+MAQAM_SMALL static unsigned step_scale(unsigned s, int dset, int dscale)
 {
     unsigned set = SCALES[s].set;
     if (dset) {
@@ -46,31 +46,31 @@ static unsigned step_scale(unsigned s, int dset, int dscale)
     }
     return s;
 }
-static unsigned key_pc(uint32_t keys)
+MAQAM_SMALL static unsigned key_pc(uint32_t keys)
 {
     for (unsigned k = 0; k < PC_KEYS; ++k)
         if (keys >> k & 1U) return (KEY_BASE + k) % 12U;
     return 12;
 }
-static int has_key(uint32_t keys) { return (keys & ((1U << PC_KEYS) - 1U)) != 0; }
+MAQAM_SMALL static int has_key(uint32_t keys) { return (keys & ((1U << PC_KEYS) - 1U)) != 0; }
 /* The root a key press asks for: the key's own tone, a quarter tone lower or higher with OCT- / OCT+ held. */
-static unsigned key_root(unsigned pc, unsigned oct)
+MAQAM_SMALL static unsigned key_root(unsigned pc, unsigned oct)
 {
     return wrap24((int)pc * 2 + ((oct & 2U) ? 1 : (oct & 1U) ? -1 : 0));
 }
 static const uint8_t layout_order[3] = {MAQAM_SNAP, MAQAM_WHITE, MAQAM_CHROM};   /* display order */
 static const char *const layout_name[3] = {"SNAP", "CHROM", "WHITE"};            /* by MAQAM_* value */
-static int layout_pos(unsigned l) { for (int i = 0; i < 3; ++i) if (layout_order[i] == l) return i; return 0; }
+MAQAM_SMALL static int layout_pos(unsigned l) { for (int i = 0; i < 3; ++i) if (layout_order[i] == l) return i; return 0; }
 
 /* The track's scale and root for editing: its own, or the project's when its table is CUSTOM. */
-static void track_base(unsigned t, unsigned *s, unsigned *r)
+MAQAM_SMALL static void track_base(unsigned t, unsigned *s, unsigned *r)
 {
     *s = maqam_track_scale(t); *r = maqam_track_root(t);
     if (*s == MAQAM_CUSTOM) { *s = maqam_project_scale(); *r = maqam_project_root(); }
 }
 
 /* ---- control ---- */
-void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t key_down, unsigned oct)
+MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t key_down, unsigned oct)
 {
     int d[4] = {enc[2], enc[3], enc[4], enc[5]};
     sub = (unsigned)clampi((int)sub + enc[1], 0, MAQAM_SUBPAGES - 1);
@@ -116,7 +116,7 @@ void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t key_down, uns
 }
 
 /* ---- view ---- */
-unsigned maqam_cents_text(int c, char out[6])
+MAQAM_SMALL unsigned maqam_cents_text(int c, char out[6])
 {
     char d[12];
     unsigned n = 0, i = 0, u = c < 0 ? (unsigned)-c : (unsigned)c;
@@ -127,19 +127,19 @@ unsigned maqam_cents_text(int c, char out[6])
     out[n] = 0;
     return n;
 }
-void maqam_cents_pos(unsigned key, unsigned len, int *x, unsigned *y)
+MAQAM_SMALL void maqam_cents_pos(unsigned key, unsigned len, int *x, unsigned *y)
 {
     *x = 6 + (int)key * 19 + (19 - 6 * (int)len) / 2;
     *y = 105U + 9U * (key & 1U);
 }
-static void put(char *dst, unsigned n, const char *s) { strncpy(dst, s, n - 1); dst[n - 1] = 0; }
-static void cat(char *dst, unsigned n, const char *s)
+MAQAM_SMALL static void put(char *dst, unsigned n, const char *s) { strncpy(dst, s, n - 1); dst[n - 1] = 0; }
+MAQAM_SMALL static void cat(char *dst, unsigned n, const char *s)
 {
     unsigned l = (unsigned)strlen(dst);
     if (l < n - 1) put(dst + l, n - l, s);
 }
-static void lower(char *s) { for (; *s; ++s) if (*s >= 'A' && *s <= 'Z') *s = (char)(*s + 32); }
-static void num(char *dst, unsigned n, int v, int plus)
+MAQAM_SMALL static void lower(char *s) { for (; *s; ++s) if (*s >= 'A' && *s <= 'Z') *s = (char)(*s + 32); }
+MAQAM_SMALL static void num(char *dst, unsigned n, int v, int plus)
 {
     char d[12], o[14];
     unsigned i = 0, u = v < 0 ? (unsigned)-v : (unsigned)v, k = 0;
@@ -149,7 +149,7 @@ static void num(char *dst, unsigned n, int v, int plus)
     o[k] = 0;
     put(dst, n, o);
 }
-static void subtitle(char *out, unsigned n, unsigned s, unsigned r, unsigned desc)
+MAQAM_SMALL static void subtitle(char *out, unsigned n, unsigned s, unsigned r, unsigned desc)
 {
     out[0] = 0;
     if (s == MAQAM_CUSTOM) { put(out, n, "custom"); }
@@ -160,11 +160,11 @@ static void subtitle(char *out, unsigned n, unsigned s, unsigned r, unsigned des
         put(w, sizeof w, SET_NAMES[SCALES[s].set]); lower(w); cat(out, n, w);
         cat(out, n, " ");
         put(w, sizeof w, SCALES[s].name); lower(w); cat(out, n, w);
-        if (SCALES[s].up != SCALES[s].down) cat(out, n, desc ? "\x19" : "\x18");
+        if (scale_up(&SCALES[s]) != scale_down(&SCALES[s])) cat(out, n, desc ? "\x19" : "\x18");
     }
     cat(out, n, maqam_trad() ? " trad" : " equal");
 }
-static void masks(unsigned s, unsigned r, const struct groove_tuning *g, struct maqam_view *v)
+MAQAM_SMALL static void masks(unsigned s, unsigned r, const struct groove_tuning *g, struct maqam_view *v)
 {
     int8_t key[24];
     v->lit = 0xfff;
@@ -178,12 +178,12 @@ static void masks(unsigned s, unsigned r, const struct groove_tuning *g, struct 
     for (unsigned i = 0; i < 24; ++i) if (key[i] >= 0) v->lit |= (uint16_t)(1U << key[i]);
     if (key[0] >= 0) v->root = (uint16_t)(1U << key[0]);
 }
-static void knob(struct maqam_view *v, unsigned i, const char *label, const char *value)
+MAQAM_SMALL static void knob(struct maqam_view *v, unsigned i, const char *label, const char *value)
 {
     put(v->knob[i][0], sizeof v->knob[i][0], label);
     put(v->knob[i][1], sizeof v->knob[i][1], value);
 }
-void maqam_page_view(unsigned t, struct maqam_view *v)
+MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
 {
     static const char *const title[MAQAM_SUBPAGES] = {"1/4 PROJECT", "2/4 TRACK", "3/4 KEYS", "4/4 ALT"};
     struct groove_tuning g;
