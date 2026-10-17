@@ -37,8 +37,9 @@ A semitone degree and a quarter-tone degree compete for the same key (E half-fla
 The layout says what the 27 keys do on a tuned track. Set it with K2 on the TRACK page (section 4): the project default (saved with the project) when the track follows the project, or the track's own layout (not saved) when it has its own scale. A track that follows always plays the project layout.
 
 - **SNAP** (default): every key plays. Each key plays its own pitch class if the scale has a degree there; otherwise it plays the next scale note **above** when you are going up and **below** when going down. In C major, C# plays D going up and C going down.
-- **WHITE**: the white keys walk the **ascending** form's notes in order, starting at C4 = the root note. A seven-note maqam fits in the seven white keys of an octave, so this is the easiest way to play any maqam. A note that only the descending form has goes on a black key beside the white key of the same step: a lower variant on the left, a higher one on the right (or the other side when there is no black key there). If two such notes want the same black key, the one with no other black key beside it keeps it and the other moves to its other side. In Rast on C the B key plays B half-flat and A# plays B-flat; in Suznak on C, A# plays B-flat and G# plays A. Every other black key plays the **alt pitch** of the white key to its left (C# plays C alt), and a recorded step is marked alt. No key is silent, and WHITE does not depend on the direction of play. Scales with eight notes need C5 for the eighth.
 - **CHROM**: plain chromatic keys. Chromatic and CUSTOM tracks always play like this.
+
+Every key keeps its own pitch: the C key is always a C. The root only decides which notes belong to the scale; it never moves keys.
 
 ### Up and down
 
@@ -122,11 +123,11 @@ The page shows a **degree row**: only the scale's degrees (both forms together),
 | Control | Does |
 |---|---|
 | **K1 SCOPE** | FOLLOW or OWN. Right = this track gets its own scale, starting as a copy of the project's scale, root and key layout; left = it follows the project again (and uses the project layout) |
-| **K2 KEYS** | the key layout: SNAP, WHITE, CHROM. The project's layout when the track follows, the track's own when it is OWN |
+| **K2 KEYS** | the key layout: SNAP, CHROM. The project's layout when the track follows, the track's own when it is OWN |
 | **K3 ALT KEY** | which pitch class's alt entry to edit (highlighted in the strip; pressing a panel key does the same) |
 | **K4 ALT** | the entry's cents, +/-1 per click, from -127 to +127 |
 
-Two maqamat at once: set the project to Rast on C, then on track 2 turn K1 to OWN and, on the SCALE page, choose Bayati on D (`pages_test` "scopes"). The own layout is not saved (section 6); knob values are cut to four characters, so FOLLOW reads `FOLL` and WHITE `WHIT`, always in the large font.
+Two maqamat at once: set the project to Rast on C, then on track 2 turn K1 to OWN and, on the SCALE page, choose Bayati on D (`pages_test` "scopes"). The own layout is not saved (section 6); knob values are cut to four characters, so FOLLOW reads `FOLL`, always in the large font.
 
 The strip keeps all 12 keys, because an alt pitch can be set on any key: each shows its alt cents from the nearest quarter tone; keys that carry a degree show the degree's spelled name, the others are dimmed with their fixed name. On Bayati on D the A# key reads `Bb` and C#, D#, F#, G# are dimmed (`pages_test` "alt strip: A# key is labelled Bb", C# D# F# G# dimmed). The ALT knob shows the entry's raw value (-127..+127 from the 12-TET key). The large line shows the resulting pitch: its cents from the nearest quarter tone and its name at octave 4, spelled as for notes (alt E at -100 on Rast on C: `ALT 0 Eb4`), and the line under it the main entry the same way. Edits are kept until the scale or root of that track next changes, and are saved with the project (`pages_test` "alt").
 
@@ -140,7 +141,7 @@ On the overview and step pages the header shows the selected track's scale at th
 
 ## 5. Recipes
 
-- **Play a maqam in two moves.** SCL, K2 to ARAB, K3 to the maqam, K1 to the root (audition with the keys); SCL for the TRACK page, K2 to WHITE; HOME; play the white keys up and down.
+- **Play a maqam in two moves.** SCL, K2 to ARAB, K3 to the maqam, K1 to the root (audition with the keys); SCL for the TRACK page, K2 stays on SNAP; HOME; play the keys up and down, they snap to the maqam's notes.
 - **Hear the traditional tuning.** Hold a note on a Rast track and turn K4 on the SCALE page back and forth: the pitch moves by a few cents.
 - **One quarter tone anywhere.** Hold OCT- (or OCT+) and press a key to get the alt pitch; with Rast alt E is plain E.
 - **Record an alt note.** REC, hold OCT-, press the key: the step shows `E4.`.
@@ -282,6 +283,6 @@ Combination scales: a lower jins and a different upper jins on the 5th, each att
 
 ## Credits and sources
 
-- The scale library, the generator (`tools/gen_scales.py`), the key-assignment idea, the 24 names, the SNAP/WHITE layouts, the direction rule and the screen conventions come from **maqam-dev** (SLOOP maqam scales, GPL-3.0). The PSYCH and JINS sets come from maqam-dev's pull request #4.
+- The scale library, the generator (`tools/gen_scales.py`), the key-assignment idea, the 24 names, the SNAP layout, the direction rule and the screen conventions come from **maqam-dev** (SLOOP maqam scales, GPL-3.0). The PSYCH and JINS sets come from maqam-dev's pull request #4.
 - Turkish: Arel-Ezgi-Uzdilek system (Pythagorean ratios). Arabic: al-Ṣabbāgh (1954), Touma, *The Music of the Arabs*, maqamworld.com. Indian: just-intonation swara ratios (Bor (ed.), *The Raga Guide*). PSYCH / JINS: The Pop Descriptivist, "The Microtonal Scales of King Gizzard and the Lizard Wizard (a Primer and Compendium)", 2024; maqamworld.com; Wikipedia ("Acemli Rast", "Darbari Kanada"); Farhat, *The Dastgah Concept in Persian Music*. Each scale's source is cited in `scales/*.txt` and `scales/README.md`.
 - Everything on this page is checked by host tests: `tests/host/pages_test.c`, `names_test.c`, `keys_test.c`, `maqam_test.c` (see `tests/host/README.md`).

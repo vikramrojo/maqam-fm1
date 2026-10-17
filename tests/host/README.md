@@ -116,9 +116,8 @@ there is the first scale in index order with that table.
 
 `keys_test` (run from the repository root) drives the real `app/screen.c` through `sim_control`
 (panel keys and buttons) and `sim_render` (time), and observes notes by recording them (REC, step
-entry) and reading the sequence. It covers SNAP (C# to D up, D# to D down, 1 s reset, CHROM), WHITE
-(Rast C4..C5, B and A# in any order, black keys as recorded alt notes, Suznak G#/A#, and every
-scale on every root reaches every degree of both forms in WHITE), the layout default in the trailer, the OCT alt
+entry) and reading the sequence. It covers SNAP (C# to D up, D# to D down, 1 s reset, CHROM), the layout scopes and
+that the root never moves keys, the layout default in the trailer, the OCT alt
 gesture (measured E at the main versus alt pitch, recorded step with the alt bit and its playback),
 double-tap octave (150 ms yes, slow no, key between no, clamp), drum tracks unchanged, and key lights.
 

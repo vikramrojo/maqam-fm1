@@ -56,8 +56,8 @@ unsigned maqam_track_root(unsigned track);       /* 0..23 (0 for CUSTOM) */
 void maqam_refresh(void);
 
 /* Key layout, in the order the TRACK page cycles them. The project default is saved in the trailer (flags
-   bits 1-2); a track with its own scale (override) has its own layout (RAM only; after a load it reads as the project's). 0 SNAP is the default so a stock or absent trailer gives SNAP. */
-enum { MAQAM_SNAP, MAQAM_WHITE, MAQAM_CHROM };
+   bit 1); a track with its own scale (override) has its own layout (RAM only; after a load it reads as the project's). 0 SNAP is the default so a stock or absent trailer gives SNAP. */
+enum { MAQAM_SNAP, MAQAM_CHROM };
 unsigned maqam_default_layout(void);
 int maqam_set_default_layout(unsigned layout);   /* 0 ok, <0 bad argument */
 
@@ -68,17 +68,10 @@ unsigned maqam_layout(unsigned track);            /* effective layout (CHROM for
 int maqam_layout_raw(unsigned track);             /* the layout of the track's scope: its own when overridden, else the project's (even for chromatic scales) */
 unsigned maqam_last_descending(unsigned track);   /* the last key of the track went down (within the 1 s window state) */
 int maqam_set_layout(unsigned track, int layout); /* -1 = the project default (a track that follows always uses it); 0 ok */
-/* WHITE returns MAQAM_KEY_ALT or'ed into the note when the key plays its alt pitch (a black key with no
-   descending degree); the caller posts the note (low 8 bits) with maqam_key_alt on for that key. */
-#define MAQAM_KEY_ALT 0x100U
-/* Pure: the note for `key` going up (descending=0) or down (1). Direction matters to SNAP only. */
+/* Pure: the note for `key` going up (descending=0) or down (1). Direction matters to SNAP only; keys always keep their own pitch (the root never moves them). */
 unsigned maqam_key_note(unsigned track, unsigned key, int octave, unsigned descending);
 /* A key goes down: updates the direction (lower than the previous key within 1 s = descending). */
 unsigned maqam_key_press(unsigned track, unsigned key, int octave, uint32_t now);
-/* Key `key` of `track` sounds an alt note (on=1: before its note-on is posted) or stopped (on=0: after its
-   note-off is posted); the engine's alt hold follows (together with the OCT gesture). Clear drops all of them. */
-void maqam_key_alt(unsigned track, unsigned key, unsigned on);
-void maqam_key_alt_clear(void);
 /* Bit k set: key k carries a degree of either form. 0 for drum, CUSTOM and chromatic tracks. */
 uint32_t maqam_key_lights(unsigned track);
 /* OCT buttons. oct_held/oct_pressed: bit 0 OCT-, bit 1 OCT+. active: not a step page. key_down: a key went
@@ -89,7 +82,7 @@ unsigned maqam_oct_buttons(unsigned track, unsigned active, unsigned oct_held, u
                            unsigned key_down, uint32_t now, int *octave);
 
 /* Persistence (hooks called by app/project.c). Trailer: [0] tag, [1] scale, [2] root, [3] flags
-   (bit 0 TRAD, bits 1-2 key layout), [4] override mask, [5..6] 0, [7] ~(xor of [0..6]). */
+   (bit 0 TRAD, bit 1 key layout), [4] override mask, [5..6] 0, [7] ~(xor of [0..6]). */
 void maqam_project_save(uint8_t t[MAQAM_TRAILER_BYTES]);
 /* Call after the engine tables are loaded. NULL or an invalid trailer: defaults, tables decide. */
 void maqam_project_loaded(const uint8_t *t);

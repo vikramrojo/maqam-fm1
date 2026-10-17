@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */
 /* Maqam keyboard (tasks 4.1-4.3 of maqam-scales), driving the real app/screen.c through the simulator's
- * panel-control path (sim_control, sim_render for time): SNAP and WHITE note choice with direction and the
+ * panel-control path (sim_control, sim_render for time): SNAP and CHROM note choice with direction and the
  * 1 s reset, the OCT alt gesture, double-tap octave, recorded alt steps, and the key lights.
  * Notes are observed by recording them (REC, step entry) and reading the sequence back.
  * Run from the repository root. */
@@ -55,7 +55,6 @@ static unsigned step_alt(unsigned s)
     return (c.drums & GROOVE_STEP_ALT) != 0;
 }
 static int octave(void) { return (int)sim_state()[7] - 24; }
-#define WHITE_KEYS_C4_C5 { 7, 9, 11, 12, 14, 16, 18, 19 }
 
 static void snap(void)
 {
@@ -87,117 +86,40 @@ static void snap(void)
     CHECK(step_note(0) == 61);
     printf("snap: C#->D up, D#->D down, pause resets, CHROM own note\n");
 }
-static void white(void)
+static void layouts(void)
 {
-    static const unsigned k[8] = WHITE_KEYS_C4_C5;
-    static const unsigned up[8] = {60, 62, 64, 65, 67, 69, 71, 72};   /* C D Ed(E key) F G A Bd(B key) C */
     unsigned rast = find("RAST");
-    boot("RAST", 0, MAQAM_WHITE);
-    CHECK(maqam_layout(0) == MAQAM_WHITE);
-    rec_on();
-    for (unsigned i = 0; i < 8; ++i) key(k[i], 30);
-    for (unsigned i = 0; i < 8; ++i) CHECK(step_note(i) == up[i] && !step_alt(i));
-    /* B key then A# key, and A# then B, going down or up or after a pause: B -> Bd (71), A# -> Bb (70) */
-    boot("RAST", 0, MAQAM_WHITE);
-    rec_on();
-    key(18, 30); key(17, 30); key(17, 30); key(18, 30); key(19, 30); key(17, 30); ms(1100); key(17, 30);
-    CHECK(step_note(0) == 71 && step_note(1) == 70 && step_note(2) == 70 && step_note(3) == 71);
-    CHECK(step_note(4) == 72 && step_note(5) == 70 && step_note(6) == 70);
-    for (unsigned i = 0; i < 7; ++i) CHECK(!step_alt(i));
-    /* every other black key plays the alt of the white key to its left, marked alt */
-    boot("RAST", 0, MAQAM_WHITE);
-    rec_on();
-    key(8, 30);                               /* C# -> C alt */
-    key(10, 30);                              /* D# -> D alt */
-    key(13, 30);                              /* F# -> F alt */
-    key(15, 30);                              /* G# -> G alt */
-    key(7, 30);
-    CHECK(step_note(0) == 60 && step_alt(0) && step_note(1) == 62 && step_alt(1));
-    CHECK(step_note(2) == 65 && step_alt(2) && step_note(3) == 67 && step_alt(3));
-    CHECK(step_note(4) == 60 && !step_alt(4));
-    CHECK(!groove_alt_held(0));
-    /* the alt key sounds at the alt pitch (E: -43 c main, 0 alt; D# plays D alt, D alt = D main in Rast) and the
-       hold ends with the key; a held alt key and the OCT gesture share the hold */
-    boot("RAST", 0, MAQAM_WHITE);
-    sim_control(1, 8, 1); ms(30);
-    CHECK(groove_alt_held(0));
-    sim_control(0, OCT_DN, 1); ms(20);
-    sim_control(1, 8, 0); ms(30);
-    CHECK(groove_alt_held(0));                /* OCT still held */
-    sim_control(0, OCT_DN, 0); ms(20);
-    CHECK(!groove_alt_held(0));
-    sim_control(1, 8, 1); ms(30);
-    sim_control(1, 7, 1); ms(30);             /* a plain key at the same time */
-    sim_control(1, 8, 0); ms(30);
-    CHECK(!groove_alt_held(0));
-    sim_control(1, 7, 0); ms(30);
-    /* Suznak on C: A# -> Bb (70), G# -> A (69); white keys keep Ab (68) and B (71) */
-    boot("SUZNK", 0, MAQAM_WHITE);
-    rec_on();
-    key(17, 30); key(15, 30); key(16, 30); key(18, 30);
-    CHECK(step_note(0) == 70 && step_note(1) == 69 && step_note(2) == 68 && step_note(3) == 71);
-    for (unsigned i = 0; i < 4; ++i) CHECK(!step_alt(i));
     /* a track with its own scale has its own layout: a copy of the project's at first, then independent; a
        following track always plays the project layout */
-    boot("RAST", 0, MAQAM_WHITE);
-    CHECK(maqam_set_layout(1, MAQAM_CHROM) == 0 && maqam_layout(1) == MAQAM_WHITE);   /* follows: ignored */
-    CHECK(maqam_set_override(0, rast, 0) == 0 && maqam_layout(0) == MAQAM_WHITE);       /* the copy */
-    CHECK(maqam_set_layout(0, MAQAM_CHROM) == 0 && maqam_layout(0) == MAQAM_CHROM);
-    CHECK(maqam_set_default_layout(MAQAM_SNAP) == 0 && maqam_layout(0) == MAQAM_CHROM && maqam_layout(1) == MAQAM_SNAP);
-    CHECK(maqam_clear_override(0) == 0 && maqam_layout(0) == MAQAM_SNAP);              /* back to the project's */
-    CHECK(maqam_set_override(0, rast, 0) == 0 && maqam_layout(0) == MAQAM_SNAP);        /* a fresh copy */
-    CHECK(maqam_set_default_layout(MAQAM_WHITE) == 0 && maqam_set_layout(0, MAQAM_CHROM) == 0);
-    rec_on();
-    key(8, 30);
-    CHECK(step_note(0) == 61 && !step_alt(0));
-    printf("white: Rast C..C, B/A# in any order, black keys play alts (recorded alt), Suznak G#/A#\n");
-}
-/* Every scale x root: in WHITE the keys C4..B4 reach every degree of both forms (a white key, or a black
-   key holding a descending-only degree). Alt black keys add no degree. */
-static void white_reach(void)
-{
-    boot("RAST", 0, MAQAM_WHITE);
-    unsigned checked = 0, bad = 0, wide = 0, variants = 0;
-    for (unsigned s = 0; s < NSCALES; ++s)
-        for (unsigned r = 0; r < 24; ++r) {
-            int8_t ak[24];
-            if (maqam_assign(s, r, ak) || maqam_set_project(s, r)) continue;   /* unassignable roots are not offered */
-            if (maqam_layout(0) != MAQAM_WHITE) continue;          /* CUSTOM / chromatic: every key plays */
-            unsigned want = 0, got = 0, got_ext = 0, dup = 0;
-            for (unsigned i = 0; i < 24; ++i) if (ak[i] >= 0) want |= 1U << ak[i];
-            for (unsigned kk = 7; kk <= 26; ++kk) {
-                unsigned n = maqam_key_note(0, kk, 0, 0);
-                if ((n & 0xFFU) >= 128) { printf("silent key %u in %s %s on %u\n", kk, SET_NAMES[SCALES[s].set], SCALES[s].name, r); ++bad; continue; }
-                if (n & MAQAM_KEY_ALT) continue;
-                unsigned bit = 1U << (n % 12);
-                if (!(want & bit)) { printf("key %u plays a pitch class outside %s %s on %u\n", kk, SET_NAMES[SCALES[s].set], SCALES[s].name, r); ++dup; }
-                got_ext |= bit;
-                if (kk <= 18) got |= bit;
-            }
-            ++checked;
-            variants += (scale_down(&SCALES[s]) & ~scale_up(&SCALES[s])) != 0;
-            if (scale_popcount(scale_up(&SCALES[s])) > 7) {         /* 8 degrees cannot fit 7 white keys: C5 is the 8th */
-                ++wide;
-                if (got_ext != want) { ++bad; printf("UNREACHABLE %s %s root %u even on C4..G5\n", SET_NAMES[SCALES[s].set], SCALES[s].name, r); }
-            } else if (got != want) {
-                ++bad;
-                printf("UNREACHABLE %s %s root %u: pitch classes %03x not on C4..B4\n", SET_NAMES[SCALES[s].set], SCALES[s].name, r, want & ~got);
-            }
-            bad += dup;
-        }
-    CHECK(checked > 0);
-    CHECK(bad == 0);
-    printf("white reach: %u scale/root WHITE layouts checked (%u with descending-only degrees, %u with 8 degrees need C5), %u problems\n", checked, variants, wide, bad);
+    boot("RAST", 0, MAQAM_CHROM);
+    CHECK(maqam_set_layout(1, MAQAM_SNAP) == 0 && maqam_layout(1) == MAQAM_CHROM);    /* follows: ignored */
+    CHECK(maqam_set_override(0, rast, 0) == 0 && maqam_layout(0) == MAQAM_CHROM);        /* the copy */
+    CHECK(maqam_set_layout(0, MAQAM_SNAP) == 0 && maqam_layout(0) == MAQAM_SNAP);
+    CHECK(maqam_set_default_layout(MAQAM_SNAP) == 0 && maqam_set_layout(0, MAQAM_CHROM) == 0);
+    CHECK(maqam_layout(0) == MAQAM_CHROM && maqam_layout(1) == MAQAM_SNAP);
+    CHECK(maqam_clear_override(0) == 0 && maqam_layout(0) == MAQAM_SNAP);               /* back to the project's */
+    CHECK(maqam_set_layout(0, 2) < 0 && maqam_set_default_layout(2) < 0);                /* WHITE is gone */
+    /* Root does not move keys: the D key (key 9) plays D before and after the root changes C -> D (WEST MAJ);
+       SNAP only decides which notes belong to the scale (the C key snaps to C# in D major, going up) */
+    boot("MAJ", 0, MAQAM_SNAP);
+    CHECK(maqam_key_note(0, 9, 0, 0) == 62 && maqam_key_note(0, 7, 0, 0) == 60);
+    CHECK(maqam_set_project(find("MAJ"), 4) == 0);
+    CHECK(maqam_key_note(0, 9, 0, 0) == 62 && maqam_key_note(0, 7, 0, 0) == 61);
+    boot("MAJ", 0, MAQAM_CHROM);
+    CHECK(maqam_set_project(find("MAJ"), 4) == 0);
+    CHECK(maqam_key_note(0, 9, 0, 0) == 62 && maqam_key_note(0, 7, 0, 0) == 60);
+    printf("layouts: scopes, WHITE rejected, root does not move keys\n");
 }
 static void persistence(void)
 {
     uint8_t t[MAQAM_TRAILER_BYTES];
-    boot("RAST", 0, MAQAM_WHITE);
+    boot("RAST", 0, MAQAM_CHROM);
     maqam_project_save(t);
+    CHECK((t[3] >> 1 & 3U) == 1U);
     maqam_init();
     CHECK(maqam_default_layout() == MAQAM_SNAP);
     maqam_project_loaded(t);
-    CHECK(maqam_default_layout() == MAQAM_WHITE);
+    CHECK(maqam_default_layout() == MAQAM_CHROM);
     printf("layout default persists through the trailer\n");
 }
 static void alt(void)
@@ -337,8 +259,7 @@ static void lights(void)
 int main(void)
 {
     snap();
-    white();
-    white_reach();
+    layouts();
     persistence();
     alt();
     playback_alt();

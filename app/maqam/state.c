@@ -131,7 +131,7 @@ MAQAM_SMALL static void derive(const uint8_t *t)
     unsigned over = 0;
     st_reset();
     if (trailer_ok(t)) {
-        st.scale = t[1]; st.root = t[2]; st.trad = t[3] & 1U; st.layout = t[3] >> 1 & 3U;
+        st.scale = t[1]; st.root = t[2]; st.trad = t[3] & 1U; st.layout = (t[3] >> 1 & 3U) == MAQAM_CHROM;   /* 2-3 (the old WHITE, never shipped) load as SNAP */
         over = t[4];
     }
     if (maqam_engine_capture(g)) return;
