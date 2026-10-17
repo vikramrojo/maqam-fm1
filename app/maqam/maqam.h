@@ -68,10 +68,17 @@ unsigned maqam_layout(unsigned track);            /* effective layout (CHROM for
 int maqam_layout_raw(unsigned track);             /* the layout of the track's scope: its own when overridden, else the project's (even for chromatic scales) */
 unsigned maqam_last_descending(unsigned track);   /* the last key of the track went down (within the 1 s window state) */
 int maqam_set_layout(unsigned track, int layout); /* -1 = the project default (a track that follows always uses it); 0 ok */
-/* Pure: the note for `key` going up (descending=0) or down (1). */
+/* WHITE returns MAQAM_KEY_ALT or'ed into the note when the key plays its alt pitch (a black key with no
+   descending degree); the caller posts the note (low 8 bits) with maqam_key_alt on for that key. */
+#define MAQAM_KEY_ALT 0x100U
+/* Pure: the note for `key` going up (descending=0) or down (1). Direction matters to SNAP only. */
 unsigned maqam_key_note(unsigned track, unsigned key, int octave, unsigned descending);
 /* A key goes down: updates the direction (lower than the previous key within 1 s = descending). */
 unsigned maqam_key_press(unsigned track, unsigned key, int octave, uint32_t now);
+/* Key `key` of `track` sounds an alt note (on=1: before its note-on is posted) or stopped (on=0: after its
+   note-off is posted); the engine's alt hold follows (together with the OCT gesture). Clear drops all of them. */
+void maqam_key_alt(unsigned track, unsigned key, unsigned on);
+void maqam_key_alt_clear(void);
 /* Bit k set: key k carries a degree of either form. 0 for drum, CUSTOM and chromatic tracks. */
 uint32_t maqam_key_lights(unsigned track);
 /* OCT buttons. oct_held/oct_pressed: bit 0 OCT-, bit 1 OCT+. active: not a step page. key_down: a key went

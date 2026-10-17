@@ -96,25 +96,47 @@ static void white(void)
     CHECK(maqam_layout(0) == MAQAM_WHITE);
     rec_on();
     for (unsigned i = 0; i < 8; ++i) key(k[i], 30);
-    for (unsigned i = 0; i < 8; ++i) CHECK(step_note(i) == up[i]);
-    /* descending from C5: the B key plays B-flat (A# key) */
+    for (unsigned i = 0; i < 8; ++i) CHECK(step_note(i) == up[i] && !step_alt(i));
+    /* B key then A# key, and A# then B, going down or up or after a pause: B -> Bd (71), A# -> Bb (70) */
     boot("RAST", 0, MAQAM_WHITE);
     rec_on();
-    key(19, 30);                              /* C5 */
-    key(18, 30);                              /* B4 key, lower: descending form */
-    key(16, 30);                              /* A */
-    CHECK(step_note(0) == 72 && step_note(1) == 70 && step_note(2) == 69);
-    /* black keys are silent: C#4 (key 8) records nothing */
+    key(18, 30); key(17, 30); key(17, 30); key(18, 30); key(19, 30); key(17, 30); ms(1100); key(17, 30);
+    CHECK(step_note(0) == 71 && step_note(1) == 70 && step_note(2) == 70 && step_note(3) == 71);
+    CHECK(step_note(4) == 72 && step_note(5) == 70 && step_note(6) == 70);
+    for (unsigned i = 0; i < 7; ++i) CHECK(!step_alt(i));
+    /* every other black key plays the alt of the white key to its left, marked alt */
     boot("RAST", 0, MAQAM_WHITE);
     rec_on();
-    key(8, 30);
+    key(8, 30);                               /* C# -> C alt */
+    key(10, 30);                              /* D# -> D alt */
+    key(13, 30);                              /* F# -> F alt */
+    key(15, 30);                              /* G# -> G alt */
     key(7, 30);
-    CHECK(step_note(0) == 60);
-    /* ascending after a pause goes back to B-half-flat */
+    CHECK(step_note(0) == 60 && step_alt(0) && step_note(1) == 62 && step_alt(1));
+    CHECK(step_note(2) == 65 && step_alt(2) && step_note(3) == 67 && step_alt(3));
+    CHECK(step_note(4) == 60 && !step_alt(4));
+    CHECK(!groove_alt_held(0));
+    /* the alt key sounds at the alt pitch (E: -43 c main, 0 alt; D# plays D alt, D alt = D main in Rast) and the
+       hold ends with the key; a held alt key and the OCT gesture share the hold */
     boot("RAST", 0, MAQAM_WHITE);
+    sim_control(1, 8, 1); ms(30);
+    CHECK(groove_alt_held(0));
+    sim_control(0, OCT_DN, 1); ms(20);
+    sim_control(1, 8, 0); ms(30);
+    CHECK(groove_alt_held(0));                /* OCT still held */
+    sim_control(0, OCT_DN, 0); ms(20);
+    CHECK(!groove_alt_held(0));
+    sim_control(1, 8, 1); ms(30);
+    sim_control(1, 7, 1); ms(30);             /* a plain key at the same time */
+    sim_control(1, 8, 0); ms(30);
+    CHECK(!groove_alt_held(0));
+    sim_control(1, 7, 0); ms(30);
+    /* Suznak on C: A# -> Bb (70), G# -> A (69); white keys keep Ab (68) and B (71) */
+    boot("SUZNK", 0, MAQAM_WHITE);
     rec_on();
-    key(19, 30); key(18, 30); ms(1100); key(18, 30);
-    CHECK(step_note(1) == 70 && step_note(2) == 71);
+    key(17, 30); key(15, 30); key(16, 30); key(18, 30);
+    CHECK(step_note(0) == 70 && step_note(1) == 69 && step_note(2) == 68 && step_note(3) == 71);
+    for (unsigned i = 0; i < 4; ++i) CHECK(!step_alt(i));
     /* a track with its own scale has its own layout: a copy of the project's at first, then independent; a
        following track always plays the project layout */
     boot("RAST", 0, MAQAM_WHITE);
@@ -127,24 +149,45 @@ static void white(void)
     CHECK(maqam_set_default_layout(MAQAM_WHITE) == 0 && maqam_set_layout(0, MAQAM_CHROM) == 0);
     rec_on();
     key(8, 30);
-    CHECK(step_note(0) == 61);
-    (void)rast;
-    /* a silent black key held longer than the 1 s window must not keep the direction state alive: only the press
-       counts. G5 (key 26), then F#5 (key 25, silent, going down) held 1.3 s, then the B key (18): the window has
-       run out, so it goes up (B half-flat 71), not down (B-flat 70). */
+    CHECK(step_note(0) == 61 && !step_alt(0));
+    printf("white: Rast C..C, B/A# in any order, black keys play alts (recorded alt), Suznak G#/A#\n");
+}
+/* Every scale x root: in WHITE the keys C4..B4 reach every degree of both forms (a white key, or a black
+   key holding a descending-only degree). Alt black keys add no degree. */
+static void white_reach(void)
+{
     boot("RAST", 0, MAQAM_WHITE);
-    rec_on();
-    key(26, 30);
-    sim_control(1, 25, 1); ms(100);
-    CHECK(maqam_last_descending(0) == 1);          /* the press itself went down */
-    ms(1300);
-    CHECK(maqam_last_descending(0) == 1);          /* holding changes nothing */
-    sim_control(1, 25, 0); ms(20);
-    key(18, 30);
-    CHECK(maqam_last_descending(0) == 0);
-    CHECK(step_note(1) == 71);
-    printf("white: a held silent key does not extend the 1 s direction window\n");
-    printf("white: Rast C..C ascending, B-flat descending, black keys silent\n");
+    unsigned checked = 0, bad = 0, wide = 0, variants = 0;
+    for (unsigned s = 0; s < NSCALES; ++s)
+        for (unsigned r = 0; r < 24; ++r) {
+            int8_t ak[24];
+            if (maqam_assign(s, r, ak) || maqam_set_project(s, r)) continue;   /* unassignable roots are not offered */
+            if (maqam_layout(0) != MAQAM_WHITE) continue;          /* CUSTOM / chromatic: every key plays */
+            unsigned want = 0, got = 0, got_ext = 0, dup = 0;
+            for (unsigned i = 0; i < 24; ++i) if (ak[i] >= 0) want |= 1U << ak[i];
+            for (unsigned kk = 7; kk <= 26; ++kk) {
+                unsigned n = maqam_key_note(0, kk, 0, 0);
+                if ((n & 0xFFU) >= 128) { printf("silent key %u in %s %s on %u\n", kk, SET_NAMES[SCALES[s].set], SCALES[s].name, r); ++bad; continue; }
+                if (n & MAQAM_KEY_ALT) continue;
+                unsigned bit = 1U << (n % 12);
+                if (!(want & bit)) { printf("key %u plays a pitch class outside %s %s on %u\n", kk, SET_NAMES[SCALES[s].set], SCALES[s].name, r); ++dup; }
+                got_ext |= bit;
+                if (kk <= 18) got |= bit;
+            }
+            ++checked;
+            variants += (scale_down(&SCALES[s]) & ~scale_up(&SCALES[s])) != 0;
+            if (scale_popcount(scale_up(&SCALES[s])) > 7) {         /* 8 degrees cannot fit 7 white keys: C5 is the 8th */
+                ++wide;
+                if (got_ext != want) { ++bad; printf("UNREACHABLE %s %s root %u even on C4..G5\n", SET_NAMES[SCALES[s].set], SCALES[s].name, r); }
+            } else if (got != want) {
+                ++bad;
+                printf("UNREACHABLE %s %s root %u: pitch classes %03x not on C4..B4\n", SET_NAMES[SCALES[s].set], SCALES[s].name, r, want & ~got);
+            }
+            bad += dup;
+        }
+    CHECK(checked > 0);
+    CHECK(bad == 0);
+    printf("white reach: %u scale/root WHITE layouts checked (%u with descending-only degrees, %u with 8 degrees need C5), %u problems\n", checked, variants, wide, bad);
 }
 static void persistence(void)
 {
@@ -295,6 +338,7 @@ int main(void)
 {
     snap();
     white();
+    white_reach();
     persistence();
     alt();
     playback_alt();

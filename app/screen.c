@@ -1775,6 +1775,7 @@ static int release_keys(void)
         if (key_note[key] != 0xff) {
             if (!post((uint8_t)(0x80 + groove_channel(key_track[key])), key_note[key], 0, 3))
                 return 0;
+            maqam_key_alt(key_track[key], key, 0);
             key_note[key] = 0xff;
         }
     return 1;
@@ -1929,6 +1930,7 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
             return 0;
         retry_reset = 0;
         memset(key_note, 0xff, sizeof key_note);
+        maqam_key_alt_clear();
     }
     unsigned old_page = page, old_mode = navigation_mode();
     unsigned arp_tap = arp_down && !(controls->buttons & BUTTON(ARP)) && !arp_long;
@@ -2578,6 +2580,7 @@ controls_done:
             return 0;
         retry_reset = 0;
         memset(key_note, 0xff, sizeof key_note);
+        maqam_key_alt_clear();
     }
     uint32_t keys = controls->keys & ~blocked_keys;
     /* EDIT's labelled black keys select OP1..6 / Pitch / Global / Mono / Poly;
@@ -2598,22 +2601,27 @@ controls_done:
             }
     }
     for (unsigned key = 0; key < 27; ++key) {
-        unsigned note = groove_key_note(track, key, octave);
+        unsigned note = groove_key_note(track, key, octave), alt = 0;
         if (maqam_melodic(track)) { /* maqam: layout + direction; a sounding key keeps its note */
             if (key_note[key] != 0xff && key_track[key] == track) note = key_note[key];
             else if (!mode && (keys & (1U << key))) /* a held key only follows the direction; only a new press moves it */
                 note = (key_down & (1U << key)) ? maqam_key_press(track, key, octave, now)
                                                 : maqam_key_note(track, key, octave, maqam_last_descending(track));
+            alt = note >> 8; note &= 0xFFU;             /* a WHITE black key can play its white key's alt pitch */
         }
         if (key_note[key] != 0xff &&
             (mode || !(keys & (1U << key)) || key_note[key] != note || key_track[key] != track)) {
             if (!post((uint8_t)(0x80 + groove_channel(key_track[key])), key_note[key], 0, 3))
                 return 0;
+            maqam_key_alt(key_track[key], key, 0);
             key_note[key] = 0xff;
         }
         if (!mode && note < 128 && (keys & (1U << key)) && key_note[key] == 0xff) {
-            if (!post((uint8_t)(0x90 + groove_channel(track)), (uint8_t)note, 100, 3))
+            if (alt) maqam_key_alt(track, key, 1);
+            if (!post((uint8_t)(0x90 + groove_channel(track)), (uint8_t)note, 100, 3)) {
+                if (alt) maqam_key_alt(track, key, 0);
                 return 0;
+            }
             key_note[key] = (uint8_t)note;
             key_track[key] = (uint8_t)track;
             selected_note = note;
