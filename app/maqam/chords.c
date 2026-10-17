@@ -1,0 +1,163 @@
+/* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */
+/* Chord mode: chords stacked from the track's scale degrees, inversions, AUTO voice leading, voicing, and the
+   ownership of the notes a held chord key sounds. Chooses note numbers only; the engine tunes them. */
+#include "maqam.h"
+#include "scales.h"
+#include <string.h>
+
+enum { OFFSETS = 4, END = 0xFF, NOTES = 8, KEYS = 27 };
+
+static uint8_t set[GROOVE_TRACKS][MAQAM_CH_FIELDS];
+static struct { uint8_t n, note[NOTES]; } last[GROOVE_TRACKS];
+static struct { uint8_t track, n, p, note[NOTES]; } own[KEYS];   /* notes [0, p) are posted */
+
+/* Steps through the form's degrees from the played one (0 = root). */
+static const uint8_t SHAPE[MAQAM_CHORD_TYPES][OFFSETS] = {
+    {0, 2, 4, END}, {0, 2, 4, 6}, {0, 1, 4, END}, {0, 3, 4, END}, {0, 4, END, END}, {0, 4, 7, END}, {0, 1, 2, 3}};
+static const uint8_t LIMIT[MAQAM_CH_FIELDS] = {1, MAQAM_CHORD_TYPES - 1, MAQAM_INV_AUTO, MAQAM_VOICE_BASS};
+
+MAQAM_SMALL void maqam_chords_reset(void)
+{
+    memset(set, 0, sizeof set);
+    memset(last, 0, sizeof last);
+    memset(own, 0, sizeof own);
+}
+MAQAM_SMALL unsigned maqam_chord_get(unsigned track, unsigned field)
+{
+    return track < GROOVE_TRACKS && field < MAQAM_CH_FIELDS ? set[track][field] : 0;
+}
+MAQAM_SMALL int maqam_chord_set(unsigned track, unsigned field, unsigned value)
+{
+    if (track >= GROOVE_TRACKS || field >= MAQAM_CH_FIELDS || value > LIMIT[field]) return -1;
+    set[track][field] = (uint8_t)value;
+    return 0;
+}
+MAQAM_SMALL void maqam_chord_commit(unsigned track, const uint8_t *notes, unsigned n)
+{
+    if (track >= GROOVE_TRACKS || n > NOTES) return;
+    last[track].n = (uint8_t)n;
+    memcpy(last[track].note, notes, n);
+}
+MAQAM_SMALL unsigned maqam_chord_last(unsigned track, uint8_t out[8])
+{
+    if (track >= GROOVE_TRACKS) return 0;
+    memcpy(out, last[track].note, NOTES);
+    return last[track].n;
+}
+
+MAQAM_SMALL static void sort(int16_t *b, unsigned n)
+{
+    for (unsigned i = 1; i < n; ++i)
+        for (unsigned j = i; j && b[j - 1] > b[j]; --j) { int16_t t = b[j]; b[j] = b[j - 1]; b[j - 1] = t; }
+}
+/* The chord stacked on the played note, ascending, in b (may be outside 0..127); the count, 0 if none. */
+MAQAM_SMALL static unsigned stack(unsigned track, unsigned note, unsigned desc, int16_t b[NOTES])
+{
+    unsigned scale, root, deg = 24, len = 0, idx = 0, n = 0;
+    const int8_t *key = maqam_keys_assignment(track, &scale, &root);
+    uint8_t slot[24];
+    if (!key) return 0;
+    note = maqam_snap(key, note, desc);
+    for (unsigned i = 0; i < 24; ++i)
+        if (key[i] == (int)(note % 12U)) deg = i;
+    if (deg == 24) return 0;
+    uint32_t form = scale_up(&SCALES[scale]);
+    if (!(form >> deg & 1U)) form = scale_down(&SCALES[scale]);   /* a descending-only degree: its form */
+    for (unsigned i = 0; i < 24; ++i)
+        if (form >> i & 1U) { if (i == deg) idx = len; slot[len++] = (uint8_t)i; }
+    const uint8_t *shape = SHAPE[set[track][MAQAM_CH_TYPE]];
+    for (; n < OFFSETS && shape[n] != END; ++n) {
+        unsigned j = idx + shape[n], s = slot[j % len];
+        /* the slot's pitch in quarter tones above the played note, then the note of its key nearest to it */
+        int x = 2 * (int)note + (int)s + 24 * (int)(j / len) - (int)deg - 2 * key[s];
+        b[n] = (int16_t)(key[s] + 12 * maqam_fdiv(x + 12, 24));
+    }
+    return n;
+}
+/* Inversion, voicing and octave shift of a stacked chord; sorted, 0..127 only, no duplicates, at most 8. */
+MAQAM_SMALL static unsigned voice(const int16_t *base, unsigned n, unsigned inv, unsigned voicing, int shift, uint8_t *out)
+{
+    int16_t b[NOTES + 1];
+    unsigned c = 0;
+    if (inv > n - 1) inv = n - 1;
+    for (unsigned i = 0; i < n; ++i) b[i] = (int16_t)(base[i] + (i < inv ? 12 : 0));
+    sort(b, n);
+    if (voicing == MAQAM_VOICE_OPEN && n >= 3) b[1] = (int16_t)(b[1] + 12);
+    if (voicing == MAQAM_VOICE_BASS) {
+        memmove(b + 1, b, n * sizeof b[0]);
+        b[0] = (int16_t)(b[1] - 12);
+        ++n;
+    }
+    for (unsigned i = 0; i < n; ++i) b[i] = (int16_t)(b[i] + shift);
+    sort(b, n);
+    for (unsigned i = 0; i < n && c < NOTES; ++i)
+        if (b[i] >= 0 && b[i] <= 127 && (!c || out[c - 1] != b[i])) out[c++] = (uint8_t)b[i];
+    return c;
+}
+MAQAM_SMALL unsigned maqam_chord_notes(unsigned track, unsigned note, unsigned desc, uint8_t out[8])
+{
+    int16_t b[NOTES];
+    unsigned n = track < GROOVE_TRACKS ? stack(track, note, desc, b) : 0;
+    if (!n) return 0;
+    unsigned inv = set[track][MAQAM_CH_INV], v = set[track][MAQAM_CH_VOICE], p = last[track].n;
+    if (inv != MAQAM_INV_AUTO || !p) return voice(b, n, inv == MAQAM_INV_AUTO ? 0 : inv, v, 0, out);
+    /* AUTO: the inversion and octave nearest the last chord (sorted notes, shorter length), ties to the lower
+       inversion, then shift 0 */
+    static const int8_t SHIFT[3] = {0, -12, 12};
+    unsigned best = ~0U, count = 0;
+    for (unsigned i = 0; i < n; ++i)
+        for (unsigned h = 0; h < 3; ++h) {
+            uint8_t c[NOTES];
+            unsigned m = voice(b, n, i, v, SHIFT[h], c), d = 0;
+            if (!m) continue;
+            for (unsigned k = 0; k < m && k < p; ++k) d += (unsigned)(c[k] > last[track].note[k] ? c[k] - last[track].note[k] : last[track].note[k] - c[k]);
+            if (d < best) { best = d; count = m; memcpy(out, c, m); }
+        }
+    return count;
+}
+
+MAQAM_SMALL unsigned maqam_chord_holders(unsigned track, unsigned note, unsigned skip)
+{
+    unsigned c = 0;
+    for (unsigned k = 0; k < KEYS; ++k)
+        if (k != skip && own[k].track == track)
+            for (unsigned i = 0; i < own[k].p; ++i) c += own[k].note[i] == note;
+    return c;
+}
+MAQAM_SMALL unsigned maqam_chord_start(unsigned key, unsigned track, unsigned note, unsigned desc)
+{
+    if (key >= KEYS) return 0;
+    own[key].n = own[key].p = 0;
+    if (!maqam_chord_get(track, MAQAM_CH_MODE) || !maqam_melodic(track)) return 0;
+    unsigned n = maqam_chord_notes(track, note, desc, own[key].note);
+    if (!n) return 0;
+    maqam_chord_commit(track, own[key].note, n);
+    own[key].track = (uint8_t)track;
+    return own[key].n = (uint8_t)n;
+}
+MAQAM_SMALL unsigned maqam_chord_owned(unsigned key) { return key < KEYS && own[key].n; }
+MAQAM_SMALL int maqam_chord_play(unsigned key, int (*out)(unsigned, unsigned, unsigned))
+{
+    while (own[key].p < own[key].n) {
+        unsigned note = own[key].note[own[key].p], t = own[key].track;
+        if (maqam_chord_holders(t, note, key) && !out(t, note, 0)) return 0;
+        if (!out(t, note, 1)) return 0;
+        ++own[key].p;
+    }
+    return 1;
+}
+MAQAM_SMALL int maqam_chord_stop(unsigned key, int (*out)(unsigned, unsigned, unsigned))
+{
+    while (own[key].p) {
+        unsigned note = own[key].note[own[key].p - 1], t = own[key].track;
+        if (!maqam_chord_holders(t, note, key) && !out(t, note, 0)) return 0;
+        --own[key].p;
+    }
+    own[key].n = 0;
+    return 1;
+}
+MAQAM_SMALL void maqam_chord_sync(const uint8_t key_note[27])
+{
+    for (unsigned k = 0; k < KEYS; ++k)
+        if (key_note[k] == 0xFF) own[k].n = own[k].p = 0;
+}

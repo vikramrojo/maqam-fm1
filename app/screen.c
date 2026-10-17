@@ -1769,11 +1769,21 @@ static void paint_flush(void)
     paint_rendering = 0;
     cache = &saved_cache;
 }
+static int chord_out(unsigned t, unsigned note, unsigned on) /* maqam: a chord note on/off */
+{
+    return post((uint8_t)((on ? 0x90 : 0x80) + groove_channel(t)), (uint8_t)note, on ? 100 : 0, 3);
+}
+/* maqam: the note-off of a held key: its chord (a note others hold stays) or its one note */
+static int key_off(unsigned key)
+{
+    return maqam_chord_owned(key) ? maqam_chord_stop(key, chord_out) : chord_out(key_track[key], key_note[key], 0);
+}
 static int release_keys(void)
 {
+    maqam_chord_sync(key_note);
     for (unsigned key = 0; key < 27; ++key)
         if (key_note[key] != 0xff) {
-            if (!post((uint8_t)(0x80 + groove_channel(key_track[key])), key_note[key], 0, 3))
+            if (!key_off(key))
                 return 0;
             key_note[key] = 0xff;
         }
@@ -2597,6 +2607,7 @@ controls_done:
                 else toggle_step(first + i);
             }
     }
+    maqam_chord_sync(key_note); /* maqam: */
     for (unsigned key = 0; key < 27; ++key) {
         unsigned note = groove_key_note(track, key, octave);
         if (maqam_melodic(track)) { /* maqam: layout + direction; a sounding key keeps its note */
@@ -2607,10 +2618,20 @@ controls_done:
         }
         if (key_note[key] != 0xff &&
             (mode || !(keys & (1U << key)) || key_note[key] != note || key_track[key] != track)) {
-            if (!post((uint8_t)(0x80 + groove_channel(key_track[key])), key_note[key], 0, 3))
+            if (!key_off(key)) /* maqam: */
                 return 0;
             key_note[key] = 0xff;
         }
+        if (!mode && note < 128 && (keys & (1U << key)) && key_note[key] == 0xff && maqam_melodic(track) &&
+            maqam_chord_start(key, track, note, maqam_last_descending(track))) { /* maqam: chord mode; the key's lowest note stands for it */
+            uint8_t first[8];
+            maqam_chord_last(track, first);
+            key_note[key] = first[0];
+            key_track[key] = (uint8_t)track;
+            selected_note = note;
+        }
+        if (!mode && (keys & (1U << key)) && maqam_chord_owned(key) && !maqam_chord_play(key, chord_out))
+            return 0; /* maqam: */
         if (!mode && note < 128 && (keys & (1U << key)) && key_note[key] == 0xff) {
             if (!post((uint8_t)(0x90 + groove_channel(track)), (uint8_t)note, 100, 3))
                 return 0;

@@ -22,7 +22,7 @@ MAQAM_SMALL void maqam_keys_reset(void)
 
 
 /* Assignment for the track, or NULL for drum, CUSTOM and chromatic tracks (they play every key). */
-MAQAM_SMALL static const int8_t *assignment(unsigned track, unsigned *scale, unsigned *root)
+MAQAM_SMALL const int8_t *maqam_keys_assignment(unsigned track, unsigned *scale, unsigned *root)
 {
     if (!maqam_melodic(track)) return 0;
     unsigned s = maqam_track_scale(track), r = maqam_track_root(track);
@@ -49,7 +49,7 @@ MAQAM_SMALL static unsigned pc_mask(const int8_t *key)
 MAQAM_SMALL unsigned maqam_layout(unsigned track)
 {
     unsigned s, r;
-    if (track >= GROOVE_TRACKS || !assignment(track, &s, &r)) return MAQAM_CHROM;
+    if (track >= GROOVE_TRACKS || !maqam_keys_assignment(track, &s, &r)) return MAQAM_CHROM;
     return (unsigned)maqam_layout_raw(track);
 }
 MAQAM_SMALL int maqam_set_layout(unsigned track, int layout)
@@ -76,12 +76,15 @@ MAQAM_SMALL static unsigned snap(int base, unsigned pcs, unsigned desc)
     return (unsigned)base;
 }
 
+/* The key note SNAP would play for `note` (it is `note` when its pitch class carries a degree of assignment `k`). */
+MAQAM_SMALL unsigned maqam_snap(const int8_t *k, unsigned note, unsigned desc) { return snap((int)note, pc_mask(k), desc); }
+
 MAQAM_SMALL unsigned maqam_key_note(unsigned track, unsigned key, int octave, unsigned desc)
 {
     int base = KEY_BASE + (int)key + octave * 12;
     base = base < 0 ? 0 : base > 127 ? 127 : base;
     unsigned scale, root, layout = maqam_layout(track);
-    const int8_t *k = assignment(track, &scale, &root);
+    const int8_t *k = maqam_keys_assignment(track, &scale, &root);
     if (!k || layout == MAQAM_CHROM) return groove_key_note(track, key, octave);
     return snap(base, pc_mask(k), desc);
 }
@@ -100,7 +103,7 @@ MAQAM_SMALL unsigned maqam_key_press(unsigned track, unsigned key, int octave, u
 MAQAM_SMALL uint32_t maqam_key_lights(unsigned track)
 {
     unsigned s, r;
-    const int8_t *k = assignment(track, &s, &r);
+    const int8_t *k = maqam_keys_assignment(track, &s, &r);
     uint32_t bits = 0;
     if (!k) return 0;
     unsigned pcs = pc_mask(k);
