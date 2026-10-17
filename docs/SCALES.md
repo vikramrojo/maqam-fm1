@@ -48,7 +48,7 @@ Scales can have different ascending and descending forms (Rast: B half-flat up, 
 
 On a melodic track, **hold OCT- or OCT+** and press a key: that note uses the **alt** table. While recording, the step is stored with the alt flag and plays back alt. Keys already sounding are not re-attacked when you press or release OCT.
 
-The octave changes with a **double tap** of OCT- or OCT+ (two presses within 300 ms, no key between). A single tap does nothing on melodic tracks. On drum tracks and on the step pages the OCT buttons keep their stock behaviour (single press changes the octave / pages the steps).
+The octave changes with a **double tap** of OCT- or OCT+ (two presses within 300 ms, no key between). A single tap does nothing on melodic tracks. On drum tracks and on the step pages the OCT buttons keep their stock behaviour (single press changes the octave / pages the steps). The scale pages behave like the main pages here.
 
 ### Key lights
 
@@ -87,15 +87,17 @@ Spelling is computed from the scale and root every time; nothing is stored. Of t
 
 ## 4. The scale pages
 
-Open them with **HOME + SCL** (hold HOME, press SCL; in either order). The SCL button lights while you are there. **HOME** leaves, as on every page; **SCL** alone is still the stock FM scaling page; **SAVE** opens the project page and returns here after a good save. The keys do not play on these pages: they are controls.
+Open them with **SCL**: they come up on the page you used last. **SCL** again moves to the next page (1/4, 2/4, 3/4, 4/4, then 1/4 again; **ALGO** does the same, both ways). The SCL button lights while you are there. **HOME** leaves, as on every page; **SAVE** opens the project page and returns here after a good save. The stock FM scaling screens (DX7 level and rate scaling, or the pitch page on other engines) are on **HOME + SCL** (hold HOME, press SCL): on that screen SCL keeps toggling level and rate as in stock, and HOME + SCL again goes back to the scale pages. The **keys play** on every scale page as on the main pages; on the ALT page a key also selects that key for editing. The root is set only with K1.
 
-**SELECT** picks the track, **ALGO** moves between the four pages. The top of every page shows the subtitle, for the project (page 1) or the selected track (pages 2-4):
+The pages use the same frame as the DX7 edit pages: the stock header (tempo, transport, mode) stays, and a small row under it reads `T1 DX7  PROJECT  1/4` (track, source, page name, position). The hint row reads `SCL PAGE  SELECT TRACK  HOME BACK`. Changing page redraws only the page name, the position, the content and the knobs (`pages_test` "frame").
+
+**SELECT** picks the track, **ALGO** moves between the four pages like SCL. Under the section row every page shows the subtitle, for the project (page 1) or the selected track (pages 2-4):
 
 `Ed arab sikah^ trad` (`pages_test` "subtitle after K1/K2/K3") = root Ed (E half-flat), set ARAB, scale Sikah, TRAD.
 
 - The arrow after the scale name (up or down, as the last key of the track went) shows **only for scales whose two forms differ**. Scales with one form (Major, Bilawal ...) show none.
 - The line under it says whether the track **FOLLOWS PROJECT**, has an **OVERRIDE**, or has a **CUSTOM TABLE**, and for drum tracks **DRUMS - NOT TUNED**.
-- The **home hint** `home: Ed` shows the scale's traditional tonic for non-Western scales. It is a hint only: choosing a scale never moves the root. To play Sikah at home, press E half-flat as the root (OCT- + E).
+- The **home hint** `home: Ed` shows the scale's traditional tonic for non-Western scales. It is a hint only: choosing a scale never moves the root. To play Sikah at home, set the root to E half-flat with K1.
 - **Pages 1 and 2 show a degree row**: only the scale's degrees (both forms together), in pitch order from the root, each cell with its spelled name and, under it, its cents from the nearest quarter tone (24-TET); a row of all zeros (WEST, EQUAL) shows no cents. Green frame = the root. A degree of one form only is marked: `^` ascending only, `v` descending only. Keys that carry no degree do not appear. Bayati on D, TRAD: seven cells `D Ed F G A Bb C` with `0 +3 -6 -2 +2 +16 -4` (Ed is 47 c below E, 3 c above E half-flat) (`pages_test` "Bayati on D", "Bayati row cents"). Rast on C: `C D Ed F G A Bb Bd`, `Bb` marked down (descending only) and `Bd` marked up (ascending only) (`pages_test` "Rast on C"). Every scale gives one cell per degree (5 to 9; 12 for WEST chromatic) (`pages_test` "degree row: one cell per degree"). A CUSTOM track has no degrees and keeps the 12-key strip.
 - Page 3 (KEYS) and page 4 (ALT) keep the strip of all 12 keys: coloured = carries a degree, green frame = root.
 - If the last project save was refused because a sample bank leaves no room for the tuning tables, the pages show **SAVE FAILED: REDUCE SAMPLE BANK** (section 6).
@@ -108,8 +110,6 @@ Open them with **HOME + SCL** (hold HOME, press SCL; in either order). The SCL b
 | **K2 SET** | WEST, TURK, ARAB, INDIA, PSYCH, JINS (jumps to that set's first scale) |
 | **K3 SCALE** | the scale within the set (wraps) |
 | **K4 TUNING** | right = TRAD, left = EQUAL |
-| **a key** | sets the root to that note |
-| **OCT- + a key** / **OCT+ + a key** | the root a quarter tone lower / higher: OCT- + E = E half-flat |
 
 Every melodic track follows these unless it overrides.
 
@@ -119,7 +119,6 @@ Every melodic track follows these unless it overrides.
 |---|---|
 | **K1 OVERRIDE** | right = this track gets its own root and scale (starting from the project's); left = it follows the project again |
 | **K2 ROOT**, **K3 SET**, **K4 SCALE** | edit the track's root, set and scale (turning any of them switches the override on) |
-| **a key**, **OCT-/OCT+ + key** | the track's root, as on page 1 |
 
 A track always uses the project's intonation. Two maqamat at once: set the project to Rast on C, then override track 2 with Bayati on D.
 
@@ -145,9 +144,13 @@ The strip keeps all 12 keys, because an alt pitch can be set on any key: keys th
 
 ---
 
+### The scale tag
+
+On the overview and step pages the header shows the selected track's scale at the right, under the mode box: the spelled root and the scale name cut to four characters, `Ed RAST` (`pages_test` "Rast on Ed"). It is hidden for WEST chromatic and for drum tracks, and a hand-edited table shows `CUST`.
+
 ## 5. Recipes
 
-- **Play a maqam in two moves.** HOME+SCL, K2 to ARAB, K3 to the maqam, press the root key (or K1); ALGO twice to KEYS, K1 to WHITE; HOME; play the white keys up and down.
+- **Play a maqam in two moves.** SCL, K2 to ARAB, K3 to the maqam, K1 to the root (audition with the keys); ALGO twice to KEYS, K1 to WHITE; HOME; play the white keys up and down.
 - **Hear the traditional tuning.** Hold a note on a Rast track and turn K4 on page 1 back and forth: the pitch moves by a few cents.
 - **One quarter tone anywhere.** Hold OCT- (or OCT+) and press a key to get the alt pitch; with Rast alt E is plain E.
 - **Record an alt note.** REC, hold OCT-, press the key: the step shows `E4.`.

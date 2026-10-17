@@ -11,7 +11,7 @@ static unsigned sub, sel;                                   /* sub-page; selecte
 
 static unsigned no_space;                                   /* the last save could not store tuning */
 
-MAQAM_SMALL void maqam_page_open(void) { sub = SUB_PROJECT; sel = 0; }
+MAQAM_SMALL void maqam_page_next(void) { sub = (sub + 1) % MAQAM_SUBPAGES; }
 MAQAM_SMALL void maqam_page_save_result(int r)
 {
     if (r == 0 || r == GROOVE_PROJECT_TUNING_SPACE) no_space = r != 0;
@@ -52,11 +52,6 @@ MAQAM_SMALL static unsigned key_pc(uint32_t keys)
         if (keys >> k & 1U) return (KEY_BASE + k) % 12U;
     return 12;
 }
-/* The root a key press asks for: the key's own tone, a quarter tone lower or higher with OCT- / OCT+ held. */
-MAQAM_SMALL static unsigned key_root(unsigned pc, unsigned oct)
-{
-    return maqam_mod((int)pc * 2 + ((oct & 2U) ? 1 : (oct & 1U) ? -1 : 0), 24);
-}
 static const char *const layout_name[3] = {"SNAP", "WHITE", "CHROM"};            /* by MAQAM_* value */
 
 /* The track's scale and root for editing: its own, or the project's when its table is CUSTOM. */
@@ -67,17 +62,15 @@ MAQAM_SMALL static void track_base(unsigned t, unsigned *s, unsigned *r)
 }
 
 /* ---- control ---- */
-MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t key_down, unsigned oct)
+MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t key_down)
 {
     int d[4] = {enc[2], enc[3], enc[4], enc[5]};
-    sub = (unsigned)clampi((int)sub + enc[1], 0, MAQAM_SUBPAGES - 1);
-    unsigned pc = key_pc(key_down), pressed = pc < 12;
+    sub = maqam_mod((int)sub + enc[1], MAQAM_SUBPAGES);
+    unsigned pc = key_pc(key_down);
     if (sub == SUB_PROJECT) {
         unsigned s = maqam_project_scale(), r = maqam_project_root();
-        if (d[0] || d[1] || d[2] || pressed) {
-            r = pressed ? key_root(pc, oct) : maqam_mod((int)r + d[0], 24);
-            s = step_scale(s, d[1], d[2]);
-            maqam_set_project(s, r);
+        if (d[0] || d[1] || d[2]) {
+            maqam_set_project(step_scale(s, d[1], d[2]), maqam_mod((int)r + d[0], 24));
         }
         if (d[3]) maqam_set_intonation(d[3] > 0);
     } else if (sub == SUB_TRACK) {
@@ -86,15 +79,12 @@ MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t k
         track_base(t, &s, &r);
         if (d[0] > 0 && !maqam_overridden(t)) maqam_set_override(t, s, r);
         else if (d[0] < 0) maqam_clear_override(t);
-        if (d[1] || d[2] || d[3] || pressed) {
-            r = pressed ? key_root(pc, oct) : maqam_mod((int)r + d[1], 24);
-            maqam_set_override(t, step_scale(s, d[2], d[3]), r);
-        }
+        if (d[1] || d[2] || d[3]) maqam_set_override(t, step_scale(s, d[2], d[3]), maqam_mod((int)r + d[1], 24));
     } else if (sub == SUB_KEYS) {                          /* the layouts are numbered in display order */
         if (d[0]) maqam_set_default_layout((unsigned)clampi((int)maqam_default_layout() + d[0], 0, 2));
         if (d[1] && maqam_melodic(t)) maqam_set_layout(t, clampi(maqam_layout_raw(t) + d[1], -1, 2));
     } else {
-        sel = pressed ? pc : maqam_mod((int)sel + d[0], 12);
+        sel = pc < 12 ? pc : maqam_mod((int)sel + d[0], 12);
         if (!maqam_melodic(t)) return;
         struct groove_tuning g;
         maqam_engine_get(t, &g);
@@ -106,6 +96,20 @@ MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t k
             maqam_engine_set(t, &g);
         }
     }
+}
+
+/* The header tag on the overview and step pages: "Ed RAST" (spelled root, scale name cut to 4). 0 (nothing
+   written) for a drum track or WEST chromatic; CUSTOM gives "CUST". out holds 12 bytes. */
+MAQAM_SMALL unsigned maqam_header_tag(unsigned t, char out[12])
+{
+    unsigned s = maqam_track_scale(t);
+    memset(out, 0, 12);
+    if (!maqam_melodic(t) || !s) return 0;
+    if (s == MAQAM_CUSTOM) { memcpy(out, "CUST", 4); return 1; }
+    maqam_degree_name(s, maqam_track_root(t), maqam_track_root(t), out);
+    strcat(out, " ");
+    strncat(out, SCALES[s].name, 4);
+    return 1;
 }
 
 /* ---- view ---- */
@@ -168,11 +172,12 @@ MAQAM_SMALL static void strip(unsigned s, unsigned r, const struct groove_tuning
 }
 MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
 {
-    static const char *const title[MAQAM_SUBPAGES] = {"1/4 PROJECT", "2/4 TRACK", "3/4 KEYS", "4/4 ALT"};
+    static const char *const title[MAQAM_SUBPAGES] = {"PROJECT", "TRACK", "KEYS", "ALT"};
     struct groove_tuning g;
     memset(v, 0, sizeof *v);
     memset(&g, 0, sizeof g);
     v->title = title[sub];
+    v->index = (uint8_t)(sub + 1);
     v->tuned = (uint8_t)maqam_melodic(t);
     if (v->tuned) maqam_engine_get(t, &g);
     unsigned s = maqam_project_scale(), r = maqam_project_root();
