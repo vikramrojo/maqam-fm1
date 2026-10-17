@@ -151,19 +151,21 @@ MAQAM_SMALL static void num(char *dst, unsigned n, int v, int plus)
 }
 MAQAM_SMALL static void subtitle(char *out, unsigned n, unsigned s, unsigned r, unsigned desc)
 {
-    out[0] = 0;
-    if (s == MAQAM_CUSTOM) { put(out, n, "custom"); }
-    else {
-        char w[12];
-        maqam_degree_name(s, r, r, w);
-        put(out, n, w);
-        cat(out, n, " ");
-        put(w, sizeof w, SET_NAMES[SCALES[s].set]); lower(w); cat(out, n, w);
-        cat(out, n, " ");
-        put(w, sizeof w, SCALES[s].name); lower(w); cat(out, n, w);
-        if (scale_up(&SCALES[s]) != scale_down(&SCALES[s])) cat(out, n, desc ? "\x19" : "\x18");
+    for (unsigned set = 1;; set = 0) {          /* drop the set name when the line won't fit the large font */
+        out[0] = 0;
+        if (s == MAQAM_CUSTOM) { put(out, n, "custom"); }
+        else {
+            char w[12];
+            maqam_degree_name(s, r, r, w);
+            put(out, n, w);
+            if (set) { put(w, sizeof w, SET_NAMES[SCALES[s].set]); cat(out, n, " "); lower(w); cat(out, n, w); }
+            cat(out, n, " ");
+            put(w, sizeof w, SCALES[s].name); lower(w); cat(out, n, w);
+            if (scale_up(&SCALES[s]) != scale_down(&SCALES[s])) cat(out, n, desc ? "\x19" : "\x18");
+        }
+        cat(out, n, maqam_trad() ? " trad" : " equal");
+        if (!set || strlen(out) <= MAQAM_SUB_BIG) return;
     }
-    cat(out, n, maqam_trad() ? " trad" : " equal");
 }
 /* The key strip, or (row) the degree row: the scale's degrees in pitch order, spelled, with the table cents of
    the key that plays each and a mark for a degree of one form only. A CUSTOM table has no degrees: the strip. */
