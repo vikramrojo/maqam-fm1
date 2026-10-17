@@ -7,6 +7,9 @@
 #include "fm_patch.h"
 #include "synth_dx7.h"
 #include <math.h>
+#ifndef M_PI /* not defined by strict C11 libcs; shared by every test that includes this file */
+#define M_PI 3.14159265358979323846
+#endif
 #include <stdio.h>
 #include <string.h>
 

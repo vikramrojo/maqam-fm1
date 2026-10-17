@@ -87,7 +87,7 @@ unsigned maqam_oct_buttons(unsigned track, unsigned active, unsigned oct_held, u
                            unsigned key_down, uint32_t now, int *octave);
 
 /* Persistence (hooks called by app/project.c). Trailer: [0] tag, [1] scale, [2] root, [3] flags
-   (bit 0 TRAD, bit 1 key layout), [4] override mask, [5..6] 0, [7] ~(xor of [0..6]). */
+   (bit 0 TRAD, bit 1 key layout), [4] override mask, [5] chord-mode mask, [6] chord type | inv << 3 | voice << 6, [7] ~(xor of [0..6]). */
 void maqam_project_save(uint8_t t[MAQAM_TRAILER_BYTES]);
 /* Call after the engine tables are loaded. NULL or an invalid trailer: defaults, tables decide. */
 void maqam_project_loaded(const uint8_t *t);
@@ -137,13 +137,21 @@ int maqam_chord_play(unsigned key, int (*out)(unsigned track, unsigned note, uns
 int maqam_chord_stop(unsigned key, int (*out)(unsigned track, unsigned note, unsigned on));
 void maqam_chord_sync(const uint8_t key_note[27]);
 unsigned maqam_chord_holders(unsigned track, unsigned note, unsigned skip);
+/* Interval name (SUB MIN NEU MAJ SUP + '-' / '+' fifth + '7', DOM7, 5TH 8VA 5+8 SUS2 SUS4 ADD9 JINS, SINGLE, CUST) of
+   ascending notes from their tuned pitches (the track's alt table when alt), rounded to 50 c; out holds 8 bytes.
+   step_chord_name: the same for the chord on a step of a melodic track. */
+void maqam_chord_name(unsigned track, unsigned alt, const uint8_t *notes, unsigned n, char out[8]);
+void maqam_step_chord_name(unsigned track, unsigned step, char out[8]);
+/* Trailer bytes [5..6]: save writes them; load checks them (and applies them to every track when apply): 0 ok, -1 invalid. */
+void maqam_chords_save(uint8_t t[2]);
+int maqam_chords_load(const uint8_t t[2], unsigned apply);
 
 /* pages.c: the scale pages (control task only). The screen hooks in screen.c only open the page, pass the
    encoders/keys in and draw this view; every value is read back from the maqam_* state. */
-enum { MAQAM_SUBPAGES = 2 };
+enum { MAQAM_SUBPAGES = 3 };
 struct maqam_view {
-    const char *title;               /* the page word: SCALE, TRACK (static) */
-    uint8_t index;                   /* its position 1..MAQAM_SUBPAGES (drawn n/2) */
+    const char *title;               /* the page word: SCALE, TRACK, CHORD (static) */
+    uint8_t index;                   /* its position 1..MAQAM_SUBPAGES (drawn n/3) */
 #define MAQAM_SUB_BIG 19                /* longest subtitle drawn in the large font */
     char sub[32];                    /* "Ed ARAB Sikah trad" (arrow after the scale when its forms differ) */
     char status[28];                 /* "TRACK 3  FOLLOWS PROJECT" / OWN SCALE / CUSTOM TABLE / DRUMS - NOT TUNED */

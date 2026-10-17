@@ -350,6 +350,83 @@ static void trailer(void)
     CHECK(groove_project_save_slot(5) == 0 && sector(5)[TAIL] == 0xA1 && record_crc(sector(5)) == *(const uint32_t *)(const void *)(sector(5) + 12));
 }
 
+/* ---- chord settings in trailer bytes [5] (chord-mode mask) and [6] (type | inv << 3 | voice << 6) ---- */
+static void chords(unsigned track, unsigned type, unsigned inv, unsigned voice)
+{
+    CHECK(maqam_chord_set(track, MAQAM_CH_MODE, 1) == 0 && maqam_chord_set(track, MAQAM_CH_TYPE, type) == 0);
+    CHECK(maqam_chord_set(track, MAQAM_CH_INV, inv) == 0 && maqam_chord_set(track, MAQAM_CH_VOICE, voice) == 0);
+}
+static void patch(unsigned slot, unsigned b5, unsigned b6)   /* new [5], [6] and check byte, in the slot and its staging copy */
+{
+    uint8_t *tl[2] = {sector(slot) + TAIL, sector(STAGING) + TAIL};
+    for (unsigned k = 0; k < 2; ++k) {
+        uint8_t x = 0;
+        tl[k][5] = (uint8_t)b5;
+        tl[k][6] = (uint8_t)b6;
+        for (unsigned i = 0; i < 7; ++i) x ^= tl[k][i];
+        tl[k][7] = (uint8_t)~x;
+    }
+}
+static void reload(unsigned slot)
+{
+    tun8 z; memset(z, 0, sizeof z);
+    maqam_init();
+    CHECK(groove_tuning_apply(z) == 0);
+    CHECK(groove_project_load_slot(slot) == 0);
+}
+static unsigned chord_is(unsigned t, unsigned mode, unsigned type, unsigned inv, unsigned voice)
+{
+    return maqam_chord_get(t, MAQAM_CH_MODE) == mode && maqam_chord_get(t, MAQAM_CH_TYPE) == type &&
+           maqam_chord_get(t, MAQAM_CH_INV) == inv && maqam_chord_get(t, MAQAM_CH_VOICE) == voice;
+}
+static void chord_trailer(void)
+{
+    unsigned rs = find("RAST");
+    /* round trip: track 2 (index 1... the third track) in chord mode with 7TH / AUTO / OPEN */
+    fresh();
+    CHECK(maqam_set_project(rs, 0) == 0);
+    chords(2, MAQAM_CHORD_7TH, MAQAM_INV_AUTO, MAQAM_VOICE_OPEN);
+    CHECK(groove_project_save_slot(6) == 0);
+    CHECK(sector(6)[TAIL + 5] == 4 && sector(6)[TAIL + 6] == (1 | 4 << 3 | 1 << 6));
+    reload(6);
+    CHECK(maqam_project_scale() == rs && chord_is(2, 1, MAQAM_CHORD_7TH, MAQAM_INV_AUTO, MAQAM_VOICE_OPEN));
+    CHECK(chord_is(0, 0, MAQAM_CHORD_7TH, MAQAM_INV_AUTO, MAQAM_VOICE_OPEN));     /* every track gets the one set; only the mask differs */
+    /* lossy: tracks 2 and 4 (indexes 1 and 3) differ, both load with the lowest-numbered track's set */
+    fresh();
+    CHECK(maqam_set_project(rs, 0) == 0);
+    chords(3, MAQAM_CHORD_JINS, MAQAM_INV_1ST, MAQAM_VOICE_BASS);
+    chords(1, MAQAM_CHORD_7TH, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE);
+    CHECK(groove_project_save_slot(6) == 0);
+    CHECK(sector(6)[TAIL + 5] == (2 | 8) && sector(6)[TAIL + 6] == MAQAM_CHORD_7TH);
+    reload(6);
+    CHECK(chord_is(1, 1, MAQAM_CHORD_7TH, 0, 0) && chord_is(3, 1, MAQAM_CHORD_7TH, 0, 0) && chord_is(2, 0, MAQAM_CHORD_7TH, 0, 0));
+    /* no track in chord mode: the defaults are saved whatever the other fields hold */
+    fresh();
+    CHECK(maqam_chord_set(2, MAQAM_CH_TYPE, MAQAM_CHORD_JINS) == 0 && groove_project_save_slot(7) == 0);
+    CHECK(!sector(7)[TAIL + 5] && !sector(7)[TAIL + 6]);
+    /* an old trailer ([5] = [6] = 0): chord mode off, TRIAD / ROOT / CLOSE; a chord-less project leaves the scale alone */
+    fresh();
+    CHECK(maqam_set_project(rs, 0) == 0);
+    chords(2, MAQAM_CHORD_5P8, MAQAM_INV_2ND, MAQAM_VOICE_BASS);
+    CHECK(groove_project_save_slot(6) == 0);
+    patch(6, 0, 0);
+    reload(6);
+    CHECK(maqam_project_scale() == rs);
+    for (unsigned t = 0; t < 8; ++t) CHECK(chord_is(t, 0, MAQAM_CHORD_TRIAD, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE));
+    /* out-of-range values (type 7, inversion 5, voice 3) make the whole trailer invalid: defaults, the tables decide */
+    static const unsigned bad[3] = {7, 5 << 3, 3 << 6};
+    for (unsigned k = 0; k < 3; ++k) {
+        patch(6, 1, bad[k]);
+        reload(6);
+        CHECK(maqam_project_scale() == 0);
+        for (unsigned t = 0; t < 8; ++t) CHECK(chord_is(t, 0, MAQAM_CHORD_TRIAD, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE));
+    }
+    patch(6, 1, MAQAM_CHORD_JINS | MAQAM_INV_AUTO << 3 | MAQAM_VOICE_BASS << 6);   /* the largest valid values load */
+    reload(6);
+    CHECK(maqam_project_scale() == rs && chord_is(0, 1, MAQAM_CHORD_JINS, MAQAM_INV_AUTO, MAQAM_VOICE_BASS));
+    printf("chord trailer: round trip, lossy for several tracks, old trailer defaults, out-of-range rejected\n");
+}
+
 /* ---- 3.5 ---- */
 static void matching(void)
 {
@@ -396,6 +473,7 @@ int main(void)
     state_push();
     undo();
     trailer();
+    chord_trailer();
     matching();
     if (failures) { printf("maqam_test: %d failure(s)\n", failures); return 1; }
     printf("maqam_test: ok\n");

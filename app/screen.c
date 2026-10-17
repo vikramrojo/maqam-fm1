@@ -613,7 +613,7 @@ static void step_knob(unsigned col, unsigned bank)
     char value[12];
     if (setting == 1) { decimal(value, v ? v == 15 ? 100 : (v * 100 + 8) / 16 : 50, 1); strcat(value, "%"); }
     else if (setting == 2) { decimal(value, v ? (v * 100 + 4) / 8 : 100, 1); strcat(value, "%"); }
-    else if (setting == 3) strcpy(value, groove_sequence_chord_name(v));
+    else if (setting == 3) { strcpy(value, groove_sequence_chord_name(v)); maqam_step_chord_name(track, cursor, value); } /* maqam: melodic tracks get interval names */
     else if (setting == 4) strcpy(value, v ? "ON" : "OFF");
     else if (setting == 5 && !v) strcpy(value, "OFF");
     else if (setting < 7) decimal(value, v, 1);
@@ -1401,7 +1401,7 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
         text(30, 35, source[groove_source_type(track)], 1, TEXT, BACK);
         text(64, 35, m->title, 1, colors[track], BACK);
         number(206, 35, m->index, 1, 1, TEXT, BACK);
-        text(212, 35, "/2", 1, DIM, BACK);
+        text(212, 35, "/3", 1, DIM, BACK);
     }
     if (cache->middle_cache != sig) {
         cache->middle_cache = sig;

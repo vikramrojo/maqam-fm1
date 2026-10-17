@@ -114,17 +114,17 @@ MAQAM_SMALL void maqam_project_save(uint8_t t[MAQAM_TRAILER_BYTES])
     t[2] = st.root;
     t[3] = (uint8_t)(st.trad | st.layout << 1);
     t[4] = st.over;
-    t[5] = t[6] = 0;
+    maqam_chords_save(t + 5);
     t[7] = check(t);
 }
 MAQAM_SMALL static int trailer_ok(const uint8_t *t)
 {
     return t && t[0] == MAQAM_TRAILER_TAG && t[7] == check(t) && t[1] < maqam_scale_count() && t[2] < 24 &&
-           !(t[3] & ~7U) && (t[3] >> 1 & 3U) < 3 && !t[5] && !t[6];
+           !(t[3] & ~7U) && (t[3] >> 1 & 3U) < 3 && !maqam_chords_load(t + 5, 0);
 }
 /* The engine tables decide: a track whose main table is not the project scale's gets its own label by
    matching the library (first hit in index order), else CUSTOM, and its tables are left untouched. */
-MAQAM_SMALL static void derive(const uint8_t *t)
+MAQAM_SMALL static void derive(const uint8_t *t, unsigned chords)
 {
     struct groove_tuning g[GROOVE_TRACKS];
     int8_t want[GROOVE_TUNING_KEYS];
@@ -133,6 +133,7 @@ MAQAM_SMALL static void derive(const uint8_t *t)
     if (trailer_ok(t)) {
         st.scale = t[1]; st.root = t[2]; st.trad = t[3] & 1U; st.layout = (t[3] >> 1 & 3U) == MAQAM_CHROM;   /* 2-3 (the old WHITE, never shipped) load as SNAP */
         over = t[4];
+        if (chords) maqam_chords_load(t + 5, 1);
     }
     if (maqam_engine_capture(g)) return;
     int fits = !maqam_main(st.scale, st.root, st.trad, want);
@@ -146,7 +147,7 @@ MAQAM_SMALL static void derive(const uint8_t *t)
         st.troot[i] = (uint8_t)r;
     }
 }
-MAQAM_SMALL void maqam_project_loaded(const uint8_t *t) { maqam_init(); derive(t); }
+MAQAM_SMALL void maqam_project_loaded(const uint8_t *t) { maqam_init(); derive(t, 1); }
 MAQAM_SMALL void maqam_refresh(void)
 {
     uint8_t t[MAQAM_TRAILER_BYTES];
@@ -154,7 +155,7 @@ MAQAM_SMALL void maqam_refresh(void)
     struct groove_tuning g[GROOVE_TRACKS];
     __typeof__(st) old = st;
     maqam_project_save(t);
-    derive(t);                                     /* not maqam_init: the key layouts and the save warning stay */
+    derive(t, 0);                                  /* not maqam_init: the key layouts and the save warning stay */
     if (maqam_engine_capture(g)) return;
     for (unsigned i = 0; i < GROOVE_TRACKS; ++i)   /* keep a label that still describes the table */
         if ((old.over >> i & 1U) && (st.over >> i & 1U) && old.tscale[i] != MAQAM_CUSTOM &&

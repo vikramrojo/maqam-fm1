@@ -6,7 +6,7 @@
 #include <string.h>
 
 enum { KEY_BASE = 53, PC_KEYS = 27 };
-enum { SUB_SCALE, SUB_TRACK };
+enum { SUB_SCALE, SUB_TRACK, SUB_CHORD };
 static unsigned sub, sel;                                   /* sub-page; selected alt key (pitch class) */
 
 static unsigned no_space;                                   /* the last save could not store tuning */
@@ -77,6 +77,11 @@ MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t k
             else maqam_set_project(s, r);
         }
         if (d[3]) maqam_set_intonation(d[3] > 0);
+        return;
+    }
+    if (sub == SUB_CHORD) {                                /* MODE TYPE INV VOICE of the selected track */
+        for (unsigned i = 0; i < 4; ++i)
+            if (d[i] && mel) maqam_chord_set(t, i, maqam_chord_get(t, i) + (d[i] > 0 ? 1U : -1U));   /* out of range: no change */
         return;
     }
     if (pc < 12) sel = pc;                                 /* a key played on the TRACK page is the alt key */
@@ -173,7 +178,10 @@ MAQAM_SMALL static void strip(unsigned s, unsigned r, const struct groove_tuning
 }
 MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
 {
-    static const char *const title[MAQAM_SUBPAGES] = {"SCALE", "TRACK"};
+    static const char *const title[MAQAM_SUBPAGES] = {"SCALE", "TRACK", "CHORD"};
+    static const char label[4][6] = {"MODE", "TYPE", "INV", "VOICE"};
+    static const char value[][5] = {"TRI", "7TH", "SUS2", "SUS4", "5TH", "5+8", "JINS", "ROOT", "1ST", "2ND", "3RD", "AUTO",
+                                    "CLOS", "OPEN", "BASS", "OFF", "ON"};   /* TYPE, INV, VOICE, MODE */
     struct groove_tuning g;
     memset(v, 0, sizeof *v);
     memset(&g, 0, sizeof g);
@@ -197,11 +205,28 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
         put(v->note, sizeof v->note, "home: ");
         cat(v->note, sizeof v->note, maqam_slot_name(SCALES[s].home));
     }
-    memcpy(v->cents, sub ? g.alt : g.main, 12);
+    memcpy(v->cents, sub == SUB_TRACK ? g.alt : g.main, 12);
     strip(s, r, &g, v, !sub && !custom);
     if (no_space) put(v->warn, sizeof v->warn, "SAVE FAILED: REDUCE SAMPLE BANK");
 
-    if (!sub) {                                           /* SCALE: ROOT SET SCALE TUNING */
+    if (sub == SUB_CHORD) {                               /* the last chord, spelled, and its name */
+        static const uint8_t base[4] = {15, 0, 7, 12};
+        uint8_t n[8];
+        unsigned c = maqam_chord_last(t, n);
+        for (unsigned i = 0; i < 4; ++i) {
+            v->knob[i][0] = label[i];
+            v->knob[i][1] = value[base[i] + maqam_chord_get(t, i)];
+        }
+        v->sub[0] = 0;
+        for (unsigned i = 0; i < c; ++i) {
+            char nm[4];
+            maqam_degree_name(s, r, (unsigned)(100 * n[i] + g.main[n[i] % 12U] + 25) / 50U, nm);
+            if (i) cat(v->sub, sizeof v->sub, " ");
+            cat(v->sub, sizeof v->sub, nm);
+        }
+        v->status[0] = 0;
+        if (c) maqam_chord_name(t, 0, n, c, v->status);
+    } else if (!sub) {                                    /* SCALE: ROOT SET SCALE TUNING */
         const char *const k[3][2] = {{"ROOT", custom ? "--" : v->rname}, {"SET", custom ? "--" : SET_NAMES[set]},
                                      {"SCALE", custom ? "CUSTOM" : SCALES[s].name}};
         memcpy(v->knob, k, sizeof k);
