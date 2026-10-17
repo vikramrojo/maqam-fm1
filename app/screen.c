@@ -1397,20 +1397,22 @@ static __attribute__((noinline, cold, minsize)) void boot_draw(void)
                    i < boot_phase ? colors[i] : PANEL);
 }
 /* maqam: the scale pages (app/maqam/pages.c builds the view; this only paints it). */
-static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
+static __attribute__((noinline, minsize)) void scale_draw(const struct maqam_view *m)
 {
     uint32_t sig = signature(7U, m, sizeof *m);
     sig = signature(sig, &track, sizeof track);
     uint32_t row = (track << 4) | m->index;     /* the section row, as fm_draw's: T1 DX7  SCALE  1/2 */
     if (cache->title_cache != row) {
-        static const char *const source[GROOVE_SOURCES] = {"DX7", "303", "808", "PSG", "PLUK", "SMPL"};
+        static const char source[GROOVE_SOURCES][5] = {"DX7", "303", "808", "PSG", "PLUK", "SMPL"};
         cache->title_cache = row;
         paint_fill(0, 32, 240, 13, BACK);
-        text(8, 35, "T", 1, colors[track], BACK);
-        number(14, 35, track + 1, 1, 1, colors[track], BACK);
+        char tn[3] = {'T', (char)('1' + track), 0};
+        text(8, 35, tn, 1, colors[track], BACK);
         text(30, 35, source[groove_source_type(track)], 1, TEXT, BACK);
         text(64, 35, m->title, 1, colors[track], BACK);
-        number(206, 35, m->index, 1, 1, TEXT, BACK);
+        tn[0] = (char)('0' + m->index);
+        tn[1] = 0;
+        text(206, 35, tn, 1, TEXT, BACK);
         text(212, 35, "/3", 1, DIM, BACK);
     }
     if (cache->middle_cache != sig) {
@@ -1442,16 +1444,11 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
             text(8, drop + (i ? 164U : 134U), m->line[i], 2 - i, i ? DIM : TEXT, BACK);
         if (m->warn[0]) text(8, 182, m->warn, 1, AMBER, BACK);
     }
-    for (unsigned i = 0; i < 4; ++i)
-        if (m->knob[i][0]) {                     /* values cut to 4 characters: always the large font */
-            char value[5];
-            unsigned n = (unsigned)strlen(m->knob[i][1]);
-            n = n > 4 ? 4 : n;
-            memcpy(value, m->knob[i][1], n);
-            value[n] = 0;
-            knob(i, m->knob[i][0], value, colors[i]);
-        }
-        else if (cache->foot_cache[i] != 1U) { cache->foot_cache[i] = 1U; paint_fill(6 + 59 * i, 195, 54, 32, BACK); }
+    for (unsigned i = 0; i < 4; ++i) {           /* values cut to 4 characters: always the large font */
+        char value[5] = {0};
+        strncpy(value, m->knob[i][1], 4);
+        knob(i, m->knob[i][0], value, colors[i]);
+    }
     if (cache->hint_cache != 1U) {
         cache->hint_cache = 1U;
         text(6, 231, "SCL PAGE  SELECT TRACK  HOME BACK", 1, DIM, BACK);
@@ -1798,12 +1795,12 @@ static void paint_flush(void)
     paint_rendering = 0;
     cache = &saved_cache;
 }
-static int chord_out(unsigned t, unsigned note, unsigned on) /* maqam: a chord note on/off */
+static __attribute__((minsize)) int chord_out(unsigned t, unsigned note, unsigned on) /* maqam: a chord note on/off */
 {
     return post((uint8_t)((on ? 0x90 : 0x80) + groove_midi_input_channel(t)), (uint8_t)note, on ? 100 : 0, 3);
 }
 /* maqam: the note-off of a held key: its chord (a note others hold stays) or its one note */
-static int key_off(unsigned key)
+static __attribute__((minsize)) int key_off(unsigned key)
 {
     return maqam_chord_owned(key) ? maqam_chord_stop(key, chord_out) : chord_out(key_track[key], key_note[key], 0);
 }
@@ -1957,13 +1954,13 @@ void groove_screen_tap(uint32_t now)
     notice_until = now + 1500U;
 }
 /* The stock SCL screen: DX7 level / rate scaling (FM_EDIT groups 4, 5), or the pitch page SCL opens on other sources. */
-static unsigned stock_scl_page(void)
+static __attribute__((minsize)) unsigned stock_scl_page(void)
 {
     return (page == FM_EDIT && (fm_group == 4 || fm_group == 5)) ||
         (page == TONE_EDIT && advanced_edit && groove_source_type(track) != GROOVE_DX7 &&
          tone_pages[track][tone_slot()] == (groove_source_type(track) == GROOVE_303 ? 1U : 0U));
 }
-static void stock_scl_open(void)
+static __attribute__((minsize)) void stock_scl_open(void)
 {
     if (groove_source_type(track) == GROOVE_DX7) {
         op = operator_selected[track] < 6 ? operator_selected[track] : 0;
