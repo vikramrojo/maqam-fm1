@@ -20,8 +20,6 @@ MAQAM_SMALL void maqam_keys_reset(void)
     tap.valid = 0;
 }
 
-MAQAM_SMALL static int fdiv(int a, int b) { int q = a / b; return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q; }
-MAQAM_SMALL static unsigned popcount(uint32_t v) { unsigned n = 0; for (; v; v &= v - 1) ++n; return n; }
 
 /* Assignment for the track, or NULL for drum, CUSTOM and chromatic tracks (they play every key). */
 MAQAM_SMALL static const int8_t *assignment(unsigned track, unsigned *scale, unsigned *root)
@@ -56,7 +54,7 @@ MAQAM_SMALL unsigned maqam_layout(unsigned track)
 }
 MAQAM_SMALL int maqam_set_layout(unsigned track, int layout)
 {
-    if (track >= GROOVE_TRACKS || layout > MAQAM_WHITE || layout < -1) return -1;
+    if (track >= GROOVE_TRACKS || layout > MAQAM_CHROM || layout < -1) return -1;
     lay[track] = layout < 0 ? FOLLOW : (uint8_t)layout;
     return 0;
 }
@@ -70,7 +68,7 @@ MAQAM_SMALL static unsigned snap(int base, unsigned pcs, unsigned desc)
 {
     for (int d = 0; d < 12; ++d) {
         int m = base + (desc ? -d : d);
-        if (pcs >> (((m % 12) + 12) % 12) & 1U) return in_range(m) ? (unsigned)m : (unsigned)base;
+        if (pcs >> maqam_mod(m, 12) & 1U) return in_range(m) ? (unsigned)m : (unsigned)base;
     }
     return (unsigned)base;
 }
@@ -79,23 +77,23 @@ MAQAM_SMALL static unsigned white(unsigned scale, unsigned root, const int8_t *k
 {
     static const int8_t idx[12] = {0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6};
     int rel = (int)key_index - (C4 - KEY_BASE);         /* semitones above C4 at octave 0 */
-    int pc = ((rel % 12) + 12) % 12;
+    int pc = (int)maqam_mod(rel, 12);
     if (idx[pc] < 0) return 128;                        /* black key */
-    int w = 7 * fdiv(rel, 12) + idx[pc];
+    int w = 7 * maqam_fdiv(rel, 12) + idx[pc];
     uint32_t up = scale_up(&SCALES[scale]), down = scale_down(&SCALES[scale]);
-    uint32_t layout = popcount(down) > popcount(up) ? down : up, cur = desc ? down : up;
-    int n = (int)popcount(layout), deg = ((w % n) + n) % n, oct = fdiv(w, n), slot = 0;
+    uint32_t layout = scale_popcount(down) > scale_popcount(up) ? down : up, cur = desc ? down : up;
+    int n = (int)scale_popcount(layout), deg = (int)maqam_mod(w, n), oct = maqam_fdiv(w, n), slot = 0;
     for (int s = 0, seen = 0; s < 24; ++s)
         if (layout >> s & 1U) { if (seen++ == deg) { slot = s; break; } }
     int a = slot;                                       /* absolute slot relative to this octave's root */
     if (!(cur >> slot & 1U))                            /* missing in this form: next one in the direction */
         for (int i = 1; i < 24; ++i) {
             int c = slot + (desc ? -i : i);
-            if (cur >> (((c % 24) + 24) % 24) & 1U) { a = c; break; }
+            if (cur >> maqam_mod(c, 24) & 1U) { a = c; break; }
         }
     int p = (int)root + 24 * oct + a;                   /* quarter tones above C4 */
-    int lo = C4 + fdiv(p, 2), hi = lo + (((p % 2) + 2) % 2);
-    int want = key[((a % 24) + 24) % 24];
+    int lo = C4 + maqam_fdiv(p, 2), hi = lo + (int)maqam_mod(p, 2);
+    int want = key[maqam_mod(a, 24)];
     int m = (hi % 12 == want) ? hi : lo;
     m += 12 * octave;
     return in_range(m) ? (unsigned)m : 128;

@@ -5,7 +5,10 @@
 #include <string.h>
 
 MAQAM_SMALL unsigned maqam_scale_count(void) { return NSCALES; }
-MAQAM_SMALL const char *maqam_scale_code(unsigned scale) { return scale < NSCALES ? SCALES[scale].code : "CUSTOM"; }
+
+/* Floor division and the matching non-negative remainder (a - b * fdiv), b > 0 for the remainder. */
+MAQAM_SMALL int maqam_fdiv(int a, int b) { int q = a / b; return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q; }
+MAQAM_SMALL unsigned maqam_mod(int a, int b) { return (unsigned)(a - b * maqam_fdiv(a, b)); }
 
 /* Depth-first, slots ascending, odd absolute slots try the upper key first. */
 MAQAM_SMALL static int dfs(const uint8_t *slot, unsigned n, unsigned i, unsigned root, unsigned used, int8_t *key)
@@ -34,14 +37,6 @@ MAQAM_SMALL int maqam_assign(unsigned scale, unsigned root, int8_t key[24])
     return dfs(slot, n, 0, root, 0, key) ? 0 : -1;
 }
 
-/* Signed remainder in [-m/2, m/2). */
-MAQAM_SMALL static int wrap(int v, int m)
-{
-    v %= m;
-    if (v < 0) v += m;
-    return v >= m / 2 ? v - m : v;
-}
-
 MAQAM_SMALL int maqam_main(unsigned scale, unsigned root, unsigned trad, int8_t main[GROOVE_TUNING_KEYS])
 {
     int8_t key[24];
@@ -51,7 +46,7 @@ MAQAM_SMALL int maqam_main(unsigned scale, unsigned root, unsigned trad, int8_t 
     for (unsigned s = 0; s < 24; ++s) {
         if (key[s] < 0) continue;
         /* TRAD: the slot's pitch is the grid pitch plus its whole-cent offset (gen_scales.py rounds it). */
-        int d = wrap((int)root * 50 + (trad ? scale_cents(&SCALES[scale], s) : (int)s * 50) - key[s] * 100, 1200);
+        int d = (int)maqam_mod((int)root * 50 + (trad ? scale_cents(&SCALES[scale], s) : (int)s * 50) - key[s] * 100 + 600, 1200) - 600;
         if (d < -127 || d > 127) { d = d < 0 ? -127 : 127; r = -2; }
         main[key[s]] = (int8_t)d;
     }

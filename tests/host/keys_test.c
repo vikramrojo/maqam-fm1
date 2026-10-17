@@ -21,7 +21,7 @@ enum { C = 0, CS, D, DS, E, F, FS, G, GS, A, AS, B };
 static unsigned find(const char *code)
 {
     for (unsigned i = 0; i < NSCALES; ++i)
-        if (!strcmp(SCALES[i].code, code)) return i;
+        if (!strcmp(SCALE_CODE_STR[i], code)) return i;
     printf("FAIL no scale %s\n", code);
     ++failures;
     return 0;
@@ -122,6 +122,21 @@ static void white(void)
     key(8, 30);
     CHECK(step_note(0) == 61);
     (void)rast;
+    /* a silent black key held longer than the 1 s window must not keep the direction state alive: only the press
+       counts. G5 (key 26), then F#5 (key 25, silent, going down) held 1.3 s, then the B key (18): the window has
+       run out, so it goes up (B half-flat 71), not down (B-flat 70). */
+    boot("RAST", 0, MAQAM_WHITE);
+    rec_on();
+    key(26, 30);
+    sim_control(1, 25, 1); ms(100);
+    CHECK(maqam_last_descending(0) == 1);          /* the press itself went down */
+    ms(1300);
+    CHECK(maqam_last_descending(0) == 1);          /* holding changes nothing */
+    sim_control(1, 25, 0); ms(20);
+    key(18, 30);
+    CHECK(maqam_last_descending(0) == 0);
+    CHECK(step_note(1) == 71);
+    printf("white: a held silent key does not extend the 1 s direction window\n");
     printf("white: Rast C..C ascending, B-flat descending, black keys silent\n");
 }
 static void persistence(void)

@@ -168,7 +168,7 @@ The strip keeps all 12 keys, because an alt pitch can be set on any key: keys th
 
 ## 7. The scales
 
-Codes are what the pages show; **Home** is the traditional tonic (a hint). Scales are append-only: a scale's index is saved in projects and never moves.
+Codes are the names in the scale files and tools (the pages show the Name); **Home** is the traditional tonic (a hint). Scales are append-only: a scale's index is saved in projects and never moves.
 
 ### WEST (16)
 

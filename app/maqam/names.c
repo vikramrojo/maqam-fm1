@@ -14,30 +14,27 @@
 #define HF MAQAM_HF
 static const char *const slot_names[24] = {"C", "C+", "C#", "D" HF, "D", "D+", "D#", "E" HF, "E", "F" HF, "F", "F+",
                                            "F#", "G" HF, "G", "G+", "G#", "A" HF, "A", "A+", "A#", "B" HF, "B", "C" HF};
+MAQAM_SMALL unsigned maqam_num(char out[12], int v, unsigned plus)
+{
+    unsigned n = 0, u = v < 0 ? 0U - (unsigned)v : (unsigned)v;
+    if (v < 0) out[n++] = '-'; else if (plus) out[n++] = '+';
+    unsigned i = n;
+    do out[n++] = (char)('0' + u % 10U); while (u /= 10U);
+    out[n] = 0;
+    for (unsigned j = n; i + 1 < j; ++i, --j) { char c = out[i]; out[i] = out[j - 1]; out[j - 1] = c; }
+    return n;
+}
 MAQAM_SMALL const char *maqam_slot_name(unsigned slot) { return slot_names[slot % 24U]; }
 
-MAQAM_SMALL static int fdiv(int a, int b) { int q = a / b; return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q; }
-
-/* The signed octave number, as the stock names write it (note 60 = C4, note 0 = C-1). */
-MAQAM_SMALL static char *put_int(char *p, int v)
-{
-    char d[12];
-    unsigned n = 0, u = v < 0 ? (unsigned)-v : (unsigned)v;
-    do d[n++] = (char)('0' + u % 10U); while (u /= 10U);
-    if (v < 0) *p++ = '-';
-    while (n) *p++ = d[--n];
-    return p;
-}
 MAQAM_SMALL void maqam_name24(unsigned note, int cents, char out[12])
 {
     /* Quarter tones above C-1; the sum is rounded (ties up) to the nearest 50 c. */
-    int c = (int)note * 100 + cents, q = fdiv(c + 25, 50);
-    int slot = q - 24 * fdiv(q, 24), octave = fdiv(q, 24) - 1;
+    int c = (int)note * 100 + cents, q = maqam_fdiv(c + 25, 50);
+    int slot = q - 24 * maqam_fdiv(q, 24), octave = maqam_fdiv(q, 24) - 1;
     if (slot == 23) ++octave;                            /* C half-flat belongs to the C above it */
     char *p = out;
     for (const char *s = slot_names[slot]; *s; ++s) *p++ = *s;
-    p = put_int(p, octave);
-    *p = 0;
+    maqam_num(p, octave, 0);                             /* the signed octave number, as the stock names write it */
 }
 MAQAM_SMALL void maqam_note_name(unsigned track, unsigned note, unsigned alt, char out[12])
 {
@@ -59,15 +56,14 @@ static const uint8_t nat[7] = {0, 4, 8, 10, 14, 18, 22};   /* C D E F G A B */
 /* Accidental (quarter tones: -2 b, -1 d, 0, 1 +, 2 #) that takes letter L to pitch q; |a| > 2 does not fit. */
 MAQAM_SMALL static int accof(int q, int L)
 {
-    int a = ((q - nat[L]) % 24 + 24) % 24;
+    int a = (int)maqam_mod(q - nat[L], 24);
     return a > 12 ? a - 24 : a;
 }
 /* The letter of the tonic: of the root's spellings (natural, or the flat/sharp or half-flat/half-sharp pair)
    the one where every degree of both forms takes a single accidental with the fewest accidentals, flat on a
    tie. -1: not spellable (a form without seven degrees, or a double accidental). */
-MAQAM_SMALL static int tonic(unsigned s, unsigned r)
+MAQAM_SMALL static int tonic_calc(unsigned s, unsigned r)
 {
-    if (s >= NSCALES || r >= 24) return -1;
     uint32_t m[2] = {scale_up(&SCALES[s]), scale_down(&SCALES[s])};
     int best = -1, bc = 99, ba = 0, natural = 0;
     for (int L = 0; L < 7; ++L) natural |= accof((int)r, L) == 0;
@@ -86,6 +82,15 @@ MAQAM_SMALL static int tonic(unsigned s, unsigned r)
         if (cost < bc || (cost == bc && a < ba)) { best = L; bc = cost; ba = a; }
     }
     return best;
+}
+/* The last (scale, root) asked: names are formatted for many notes in a row (the 16 step tiles, the degree
+   row), all of the same scale and root, and the scale tables never change. */
+MAQAM_SMALL static int tonic(unsigned s, unsigned r)
+{
+    static struct { uint8_t s, r; int8_t L; } last = {NSCALES, 0, -1};
+    if (s >= NSCALES || r >= 24) return -1;
+    if (s != last.s || r != last.r) { last.s = (uint8_t)s; last.r = (uint8_t)r; last.L = (int8_t)tonic_calc(s, r); }
+    return last.L;
 }
 /* The letter of pitch q if it is a degree (the up form first, so a shared degree keeps its up spelling). */
 MAQAM_SMALL static int letter_at(int L0, unsigned s, unsigned r, unsigned q)
@@ -119,7 +124,7 @@ MAQAM_SMALL unsigned maqam_degree_name(unsigned s, unsigned r, unsigned q, char 
 }
 MAQAM_SMALL void maqam_name_scale(unsigned s, unsigned r, unsigned note, int cents, char out[12])
 {
-    int L0 = tonic(s, r), L = -1, a = 0, q = fdiv((int)note * 100 + cents + 25, 50), qm = q - 24 * fdiv(q, 24);
+    int L0 = tonic(s, r), L = -1, a = 0, q = maqam_fdiv((int)note * 100 + cents + 25, 50), qm = q - 24 * maqam_fdiv(q, 24);
     if (L0 >= 0) {
         int8_t key[24];
         L = letter_at(L0, s, r, (unsigned)qm);
@@ -130,6 +135,5 @@ MAQAM_SMALL void maqam_name_scale(unsigned s, unsigned r, unsigned note, int cen
         if (a < -2 || a > 2) L = -1;
     }
     if (L < 0) { maqam_name24(note, cents, out); return; }
-    char *p = put_int(put_name(out, L, a), fdiv(q - a, 24) - 1);
-    *p = 0;
+    maqam_num(put_name(out, L, a), maqam_fdiv(q - a, 24) - 1, 0);
 }

@@ -17,7 +17,7 @@ enum { REC = 13, SEQ = 11, OCT_DN = 0, STEP_EDIT = 13 };
 static unsigned find(const char *code)
 {
     for (unsigned i = 0; i < NSCALES; ++i)
-        if (!strcmp(SCALES[i].code, code)) return i;
+        if (!strcmp(SCALE_CODE_STR[i], code)) return i;
     printf("FAIL no scale %s\n", code);
     ++failures;
     return 0;

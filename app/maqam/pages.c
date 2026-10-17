@@ -19,30 +19,30 @@ MAQAM_SMALL void maqam_page_save_result(int r)
 
 /* ---- small helpers ---- */
 MAQAM_SMALL static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
-MAQAM_SMALL static unsigned wrap24(int v) { return (unsigned)(((v % 24) + 24) % 24); }
-MAQAM_SMALL static unsigned set_first(unsigned set)
+/* The k-th scale of a set (by index order), and a scale's place in its set. */
+MAQAM_SMALL static unsigned set_nth(unsigned set, unsigned k)
 {
-    for (unsigned i = 0; i < NSCALES; ++i) if (SCALES[i].set == set) return i;
+    for (unsigned i = 0; i < NSCALES; ++i) if (SCALES[i].set == set && !k--) return i;
     return 0;
 }
-MAQAM_SMALL static unsigned set_len(unsigned set)
+MAQAM_SMALL static unsigned set_rank(unsigned s, unsigned *len)
 {
-    unsigned n = 0;
-    for (unsigned i = 0; i < NSCALES; ++i) n += SCALES[i].set == set;
-    return n ? n : 1;
+    unsigned before = 0, n = 0;
+    for (unsigned i = 0; i < NSCALES; ++i) if (SCALES[i].set == SCALES[s].set) { before += i < s; ++n; }
+    *len = n;
+    return before;
 }
 /* Move to another set (jumps to that set's first scale; clamped at the ends) and/or around the scales of the
    current set (wraps). */
 MAQAM_SMALL static unsigned step_scale(unsigned s, int dset, int dscale)
 {
-    unsigned set = SCALES[s].set;
     if (dset) {
-        unsigned next = (unsigned)clampi((int)set + dset, 0, NSETS - 1);
-        if (next != set) { set = next; s = set_first(set); }
+        unsigned set = (unsigned)clampi((int)SCALES[s].set + dset, 0, NSETS - 1);
+        if (set != SCALES[s].set) s = set_nth(set, 0);
     }
     if (dscale) {
-        int n = (int)set_len(set), at = (int)(s - set_first(set));
-        s = set_first(set) + (unsigned)(((at + dscale % n) % n + n) % n);
+        unsigned n, at = set_rank(s, &n);
+        s = set_nth(SCALES[s].set, maqam_mod((int)at + dscale, (int)n));
     }
     return s;
 }
@@ -52,15 +52,12 @@ MAQAM_SMALL static unsigned key_pc(uint32_t keys)
         if (keys >> k & 1U) return (KEY_BASE + k) % 12U;
     return 12;
 }
-MAQAM_SMALL static int has_key(uint32_t keys) { return (keys & ((1U << PC_KEYS) - 1U)) != 0; }
 /* The root a key press asks for: the key's own tone, a quarter tone lower or higher with OCT- / OCT+ held. */
 MAQAM_SMALL static unsigned key_root(unsigned pc, unsigned oct)
 {
-    return wrap24((int)pc * 2 + ((oct & 2U) ? 1 : (oct & 1U) ? -1 : 0));
+    return maqam_mod((int)pc * 2 + ((oct & 2U) ? 1 : (oct & 1U) ? -1 : 0), 24);
 }
-static const uint8_t layout_order[3] = {MAQAM_SNAP, MAQAM_WHITE, MAQAM_CHROM};   /* display order */
-static const char *const layout_name[3] = {"SNAP", "CHROM", "WHITE"};            /* by MAQAM_* value */
-MAQAM_SMALL static int layout_pos(unsigned l) { for (int i = 0; i < 3; ++i) if (layout_order[i] == l) return i; return 0; }
+static const char *const layout_name[3] = {"SNAP", "WHITE", "CHROM"};            /* by MAQAM_* value */
 
 /* The track's scale and root for editing: its own, or the project's when its table is CUSTOM. */
 MAQAM_SMALL static void track_base(unsigned t, unsigned *s, unsigned *r)
@@ -74,11 +71,11 @@ MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t k
 {
     int d[4] = {enc[2], enc[3], enc[4], enc[5]};
     sub = (unsigned)clampi((int)sub + enc[1], 0, MAQAM_SUBPAGES - 1);
-    unsigned pc = key_pc(key_down), pressed = has_key(key_down);
+    unsigned pc = key_pc(key_down), pressed = pc < 12;
     if (sub == SUB_PROJECT) {
         unsigned s = maqam_project_scale(), r = maqam_project_root();
         if (d[0] || d[1] || d[2] || pressed) {
-            r = pressed ? key_root(pc, oct) : wrap24((int)r + d[0]);
+            r = pressed ? key_root(pc, oct) : maqam_mod((int)r + d[0], 24);
             s = step_scale(s, d[1], d[2]);
             maqam_set_project(s, r);
         }
@@ -90,18 +87,14 @@ MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t k
         if (d[0] > 0 && !maqam_overridden(t)) maqam_set_override(t, s, r);
         else if (d[0] < 0) maqam_clear_override(t);
         if (d[1] || d[2] || d[3] || pressed) {
-            r = pressed ? key_root(pc, oct) : wrap24((int)r + d[1]);
+            r = pressed ? key_root(pc, oct) : maqam_mod((int)r + d[1], 24);
             maqam_set_override(t, step_scale(s, d[2], d[3]), r);
         }
-    } else if (sub == SUB_KEYS) {
-        if (d[0]) maqam_set_default_layout(layout_order[clampi(layout_pos(maqam_default_layout()) + d[0], 0, 2)]);
-        if (d[1] && maqam_melodic(t)) {
-            int at = maqam_layout_raw(t) < 0 ? 0 : 1 + layout_pos((unsigned)maqam_layout_raw(t));
-            at = clampi(at + d[1], 0, 3);
-            maqam_set_layout(t, at ? layout_order[at - 1] : -1);
-        }
+    } else if (sub == SUB_KEYS) {                          /* the layouts are numbered in display order */
+        if (d[0]) maqam_set_default_layout((unsigned)clampi((int)maqam_default_layout() + d[0], 0, 2));
+        if (d[1] && maqam_melodic(t)) maqam_set_layout(t, clampi(maqam_layout_raw(t) + d[1], -1, 2));
     } else {
-        sel = pressed ? pc : (unsigned)((((int)sel + d[0]) % 12 + 12) % 12);
+        sel = pressed ? pc : maqam_mod((int)sel + d[0], 12);
         if (!maqam_melodic(t)) return;
         struct groove_tuning g;
         maqam_engine_get(t, &g);
@@ -116,51 +109,23 @@ MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t k
 }
 
 /* ---- view ---- */
-MAQAM_SMALL unsigned maqam_cents_text(int c, char out[6])
-{
-    char d[12];
-    unsigned n = 0, i = 0, u = c < 0 ? (unsigned)-c : (unsigned)c;
-    if (!c) { out[0] = '0'; out[1] = 0; return 1; }
-    out[n++] = c < 0 ? '-' : '+';
-    do d[i++] = (char)('0' + u % 10U); while (u /= 10U);
-    while (i) out[n++] = d[--i];
-    out[n] = 0;
-    return n;
-}
-MAQAM_SMALL void maqam_cents_pos(unsigned key, unsigned len, int *x, unsigned *y)
-{
-    *x = 6 + (int)key * 19 + (19 - 6 * (int)len) / 2;
-    *y = 105U + 9U * (key & 1U);
-}
 MAQAM_SMALL static void put(char *dst, unsigned n, const char *s) { strncpy(dst, s, n - 1); dst[n - 1] = 0; }
 MAQAM_SMALL static void cat(char *dst, unsigned n, const char *s)
 {
     unsigned l = (unsigned)strlen(dst);
     if (l < n - 1) put(dst + l, n - l, s);
 }
-MAQAM_SMALL static void lower(char *s) { for (; *s; ++s) if (*s >= 'A' && *s <= 'Z') *s = (char)(*s + 32); }
-MAQAM_SMALL static void num(char *dst, unsigned n, int v, int plus)
-{
-    char d[12], o[14];
-    unsigned i = 0, u = v < 0 ? (unsigned)-v : (unsigned)v, k = 0;
-    do d[i++] = (char)('0' + u % 10U); while (u /= 10U);
-    if (v < 0) o[k++] = '-'; else if (plus) o[k++] = '+';
-    while (i) o[k++] = d[--i];
-    o[k] = 0;
-    put(dst, n, o);
-}
-MAQAM_SMALL static void subtitle(char *out, unsigned n, unsigned s, unsigned r, unsigned desc)
+/* The subtitle: tonic, set, scale and intonation (screen.c draws text uppercase, so no case folding here). */
+MAQAM_SMALL static void subtitle(char *out, unsigned n, unsigned s, const char *tonic, unsigned desc)
 {
     for (unsigned set = 1;; set = 0) {          /* drop the set name when the line won't fit the large font */
         out[0] = 0;
         if (s == MAQAM_CUSTOM) { put(out, n, "custom"); }
         else {
-            char w[12];
-            maqam_degree_name(s, r, r, w);
-            put(out, n, w);
-            if (set) { put(w, sizeof w, SET_NAMES[SCALES[s].set]); cat(out, n, " "); lower(w); cat(out, n, w); }
+            put(out, n, tonic);
+            if (set) { cat(out, n, " "); cat(out, n, SET_NAMES[SCALES[s].set]); }
             cat(out, n, " ");
-            put(w, sizeof w, SCALES[s].name); lower(w); cat(out, n, w);
+            cat(out, n, SCALES[s].name);
             if (scale_up(&SCALES[s]) != scale_down(&SCALES[s])) cat(out, n, desc ? "\x19" : "\x18");
         }
         cat(out, n, maqam_trad() ? " trad" : " equal");
@@ -198,31 +163,25 @@ MAQAM_SMALL static void strip(unsigned s, unsigned r, const struct groove_tuning
         if (!sl) v->root = (uint16_t)(1U << k);
     }
 }
-MAQAM_SMALL static void knob(struct maqam_view *v, unsigned i, const char *label, const char *value)
-{
-    put(v->knob[i][0], sizeof v->knob[i][0], label);
-    put(v->knob[i][1], sizeof v->knob[i][1], value);
-}
 MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
 {
     static const char *const title[MAQAM_SUBPAGES] = {"1/4 PROJECT", "2/4 TRACK", "3/4 KEYS", "4/4 ALT"};
     struct groove_tuning g;
-    char tmp[16];
     memset(v, 0, sizeof *v);
     memset(&g, 0, sizeof g);
-    v->sub_page = (uint8_t)sub;
-    put(v->title, sizeof v->title, title[sub]);
+    v->title = title[sub];
     v->tuned = (uint8_t)maqam_melodic(t);
     if (v->tuned) maqam_engine_get(t, &g);
-    unsigned ps = maqam_project_scale(), pr = maqam_project_root(), s = ps, r = pr;
+    unsigned s = maqam_project_scale(), r = maqam_project_root();
     if (v->tuned && sub != SUB_PROJECT) { s = maqam_track_scale(t); r = maqam_track_root(t); }
     unsigned custom = s == MAQAM_CUSTOM, set = custom ? 0 : SCALES[s].set;
     v->custom = (uint8_t)custom;
-    subtitle(v->sub, sizeof v->sub, s, r, maqam_last_descending(t));
-    num(tmp, sizeof tmp, (int)t + 1, 0);
-    put(v->status, sizeof v->status, "TRACK ");
-    cat(v->status, sizeof v->status, tmp);
-    cat(v->status, sizeof v->status, !v->tuned ? "  DRUMS - NOT TUNED"
+    maqam_degree_name(s, r, r, v->rname);                 /* a CUSTOM scale gives the fixed name */
+    subtitle(v->sub, sizeof v->sub, s, v->rname, maqam_last_descending(t));
+    char *p = v->status;
+    memcpy(p, "TRACK ", 6);
+    p += 6 + maqam_num(p + 6, (int)t + 1, 0);
+    put(p, sizeof v->status - (unsigned)(p - v->status), !v->tuned ? "  DRUMS - NOT TUNED"
         : maqam_track_scale(t) == MAQAM_CUSTOM ? "  CUSTOM TABLE"
         : maqam_overridden(t) ? "  OVERRIDE" : "  FOLLOWS PROJECT");
     if (!custom && set != SET_WEST) {                     /* a hint: it never moves the root */
@@ -233,63 +192,35 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
     strip(s, r, &g, v, sub <= SUB_TRACK && !custom);
     if (no_space) put(v->warn, sizeof v->warn, "SAVE FAILED: REDUCE SAMPLE BANK");
 
-    const char *scale_name = custom ? "CUSTOM" : SCALES[s].name, *set_name = custom ? "--" : SET_NAMES[set];
-    if (sub == SUB_PROJECT) {
-        maqam_degree_name(s, r, r, tmp);
-        knob(v, 0, "ROOT", tmp);
-        knob(v, 1, "SET", set_name);
-        knob(v, 2, "SCALE", scale_name);
-        knob(v, 3, "TUNING", maqam_trad() ? "TRAD" : "EQUAL");
-        put(v->body[0], sizeof v->body[0], "KEY = ROOT   OCT-/OCT+ + KEY = 1/4");
-        put(v->body[1], sizeof v->body[1], maqam_trad() ? "TRAD: EXACT CENTS PER SCALE" : "EQUAL: QUARTER-TONE GRID");
-        put(v->body[2], sizeof v->body[2], "ROOT, SET AND SCALE ARE ALL PROJECT-WIDE");
-    } else if (sub == SUB_TRACK) {
-        knob(v, 0, "OVERRIDE", maqam_overridden(t) ? "ON" : "OFF");
-        maqam_degree_name(s, r, r, tmp);
-        knob(v, 1, "ROOT", custom ? "--" : tmp);
-        knob(v, 2, "SET", set_name);
-        knob(v, 3, "SCALE", scale_name);
-        put(v->body[0], sizeof v->body[0], "KEY = TRACK ROOT   K1 LEFT = FOLLOW");
-        put(v->body[1], sizeof v->body[1], custom ? "HAND-EDITED TABLE, KEPT AS IS" : "OTHER TRACKS KEEP THE PROJECT SCALE");
-        put(v->body[2], sizeof v->body[2], "TUNING IS ALWAYS THE PROJECT'S");
+    if (sub <= SUB_TRACK) {                               /* PROJECT: ROOT SET SCALE TUNING; TRACK: OVERRIDE ROOT SET SCALE */
+        const char *const k[3][2] = {{"ROOT", custom ? "--" : v->rname}, {"SET", custom ? "--" : SET_NAMES[set]},
+                                     {"SCALE", custom ? "CUSTOM" : SCALES[s].name}};
+        memcpy(v->knob + sub, k, sizeof k);
+        v->knob[sub ? 0 : 3][0] = sub ? "OVERRIDE" : "TUNING";
+        v->knob[sub ? 0 : 3][1] = sub ? (maqam_overridden(t) ? "ON" : "OFF") : (maqam_trad() ? "TRAD" : "EQUAL");
     } else if (sub == SUB_KEYS) {
         int raw = maqam_layout_raw(t);
-        knob(v, 0, "PROJECT", layout_name[maqam_default_layout()]);
-        knob(v, 1, "TRACK", raw < 0 ? "FOLLOW" : layout_name[raw]);
-        put(v->body[0], sizeof v->body[0], "SNAP: EVERY KEY, NEAREST DEGREE");
-        put(v->body[1], sizeof v->body[1], "WHITE: WHITE KEYS WALK THE SCALE");
-        put(v->body[2], sizeof v->body[2], "CHROM: PLAIN CHROMATIC KEYS");
+        v->knob[0][0] = "PROJECT"; v->knob[0][1] = layout_name[maqam_default_layout()];
+        v->knob[1][0] = "TRACK"; v->knob[1][1] = raw < 0 ? "FOLLOW" : layout_name[raw];
         if (v->tuned) {
-            put(tmp, sizeof tmp, layout_name[maqam_layout(t)]);
             put(v->note, sizeof v->note, "plays: ");
-            cat(v->note, sizeof v->note, tmp);
-            lower(v->note);
+            cat(v->note, sizeof v->note, layout_name[maqam_layout(t)]);
         }
     } else {
-        char nm[12], line[36];
-        int main_c = g.main[sel], alt_c = g.alt[sel];
         memcpy(v->cents, g.alt, 12);
         v->sel = (uint16_t)(1U << sel);
-        v->big = 1;
-        knob(v, 0, "KEY", maqam_slot_name(2 * sel));
-        num(tmp, sizeof tmp, alt_c, 1);
-        knob(v, 1, "ALT +/-1", tmp);
-        knob(v, 2, "ALT +/-10", tmp);
-        knob(v, 3, "RESET", "TURN");
-        maqam_name_scale(s, r, 60 + sel, alt_c, nm);
-        put(line, sizeof line, "ALT ");
-        num(tmp, sizeof tmp, alt_c, 0);
-        cat(line, sizeof line, tmp);
-        cat(line, sizeof line, " ");
-        cat(line, sizeof line, nm);
-        put(v->body[0], sizeof v->body[0], line);
-        maqam_name_scale(s, r, 60 + sel, main_c, nm);
-        put(line, sizeof line, "MAIN ");
-        num(tmp, sizeof tmp, main_c, 0);
-        cat(line, sizeof line, tmp);
-        cat(line, sizeof line, " ");
-        cat(line, sizeof line, nm);
-        put(v->body[1], sizeof v->body[1], line);
-        put(v->body[2], sizeof v->body[2], v->tuned ? "PRESS A KEY OR K1.  ALT = OCT HELD" : "DRUM TRACKS ARE NOT TUNED");
+        maqam_num(v->atext, g.alt[sel], 1);
+        v->knob[0][0] = "KEY"; v->knob[0][1] = maqam_slot_name(2 * sel);
+        v->knob[1][0] = "ALT +/-1"; v->knob[1][1] = v->atext;
+        v->knob[2][0] = "ALT +/-10"; v->knob[2][1] = v->atext;
+        v->knob[3][0] = "RESET"; v->knob[3][1] = "TURN";
+        for (unsigned i = 0; i < 2; ++i) {                /* "ALT -100 Eb4", "MAIN -47 Ed4" */
+            char *q = v->line[i];
+            memcpy(q, i ? "MAIN " : "ALT ", 5);
+            int c = i ? g.main[sel] : g.alt[sel];
+            q += (i ? 5 : 4) + maqam_num(q + (i ? 5 : 4), c, 0);
+            *q++ = ' ';
+            maqam_name_scale(s, r, 60 + sel, c, q);
+        }
     }
 }

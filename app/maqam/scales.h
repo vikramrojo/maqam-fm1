@@ -5,17 +5,21 @@
 #include <stdint.h>
 
 /* up/down: 24-bit masks of used grid slots, little-endian bytes (bit i = i quarter tones above the tonic).
-   off[i]: pitch of slot i above the tonic minus the grid pitch i * 50 c, whole cents; 0 for unused slots.
-   No padding: 47 bytes. */
-typedef struct { char code[6]; char name[9]; uint8_t set, home; uint8_t up[3], down[3]; int8_t off[24]; } scale_def_t;
+   off[k]: for the k-th used slot of up|down (ascending), its pitch above the tonic minus its grid pitch
+   slot * 50 c, whole cents. At most 12 used slots. No padding: 29 bytes. */
+typedef struct { char name[9]; uint8_t set, home; uint8_t up[3], down[3]; int8_t off[12]; } scale_def_t;
 static inline uint32_t scale_up(const scale_def_t *s) { return s->up[0] | (uint32_t)s->up[1] << 8 | (uint32_t)s->up[2] << 16; }
 static inline uint32_t scale_down(const scale_def_t *s) { return s->down[0] | (uint32_t)s->down[1] << 8 | (uint32_t)s->down[2] << 16; }
+static inline unsigned scale_popcount(uint32_t m) { unsigned n = 0; for (; m; m &= m - 1U) ++n; return n; }
 /* Whole cents above the tonic of grid slot `slot` (0..23); meaningful for used slots. */
-static inline int scale_cents(const scale_def_t *s, unsigned slot) { return (int)slot * 50 + s->off[slot]; }
+static inline int scale_cents(const scale_def_t *s, unsigned slot)
+{
+    return (int)slot * 50 + s->off[scale_popcount((scale_up(s) | scale_down(s)) & ((1U << slot) - 1U))];
+}
 enum { SET_WEST, SET_TURK, SET_ARAB, SET_INDIA, SET_PSYCH, SET_JINS, NSETS };
 #define NSCALES 73
 /* defined once in scales.c */
 extern const char *const SET_NAMES[NSETS];
 extern const scale_def_t SCALES[NSCALES];
-extern const char *const SCALE_CODES[NSCALES]; /* the codes as a name list */
+extern const char SCALE_CODE_STR[NSCALES][6]; /* the codes: host tools and tests only, the firmware does not use them */
 #endif

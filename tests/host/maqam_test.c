@@ -8,6 +8,7 @@
 #include "../../app/maqam/maqam.h"
 #include "../../app/maqam/scales.h"
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -26,7 +27,7 @@ enum { SECTOR = 4096, TAIL = 4088, STAGING = GROOVE_PROJECT_SLOTS };
 static unsigned find(const char *code)
 {
     for (unsigned i = 0; i < NSCALES; ++i)
-        if (!strcmp(SCALES[i].code, code)) return i;
+        if (!strcmp(SCALE_CODE_STR[i], code)) return i;
     printf("FAIL no scale %s\n", code);
     ++failures;
     return 0;
@@ -75,7 +76,7 @@ static void cross_check(void)
     unsigned lines = 0, fits = 0;
     for (unsigned s = 0; s < NSCALES; ++s) {
         char cmd[96], line[256];
-        snprintf(cmd, sizeof cmd, "python3 tools/gen_scales.py --assign %s", SCALES[s].code);
+        snprintf(cmd, sizeof cmd, "python3 tools/gen_scales.py --assign %s", SCALE_CODE_STR[s]);
         FILE *p = popen(cmd, "r");
         if (!p) { CHECK(!"popen"); return; }
         while (fgets(line, sizeof line, p)) {
@@ -84,7 +85,7 @@ static void cross_check(void)
             int n;
             int8_t ref[24], got[24];
             memset(ref, -1, sizeof ref);
-            if (sscanf(line, "%15s root %u:%n", code, &root, &n) != 2 || strcmp(code, SCALES[s].code) || root > 23) {
+            if (sscanf(line, "%15s root %u:%n", code, &root, &n) != 2 || strcmp(code, SCALE_CODE_STR[s]) || root > 23) {
                 CHECK(!"parse"); continue;
             }
             for (const char *q = line + n; *q;) {
@@ -118,10 +119,39 @@ static void cross_check(void)
     CHECK(k1[7] == E && k1[0] == CS && k1[21] == B);     /* matches the generator: 7->E, 0->C#, 21->B */
 }
 
-/* The packed record has no padding: 47 bytes, and the accessors read the little-endian masks. */
+/* The packed record has no padding: 29 bytes (off[] is indexed by the rank of the slot among the used ones), the
+   accessors read the little-endian masks, and scale_cents() agrees with the exact
+   cents the generator prints (--print, 0.1 c) to within the half cent of the whole-cent rounding. */
 static void packing(void)
 {
-    CHECK(sizeof(scale_def_t) == 47 && sizeof SCALES == 47U * NSCALES);
+    CHECK(sizeof(scale_def_t) == 29 && sizeof SCALES == 29U * NSCALES);
+    for (unsigned s = 0; s < NSCALES; ++s) {
+        CHECK(SCALES[s].set < NSETS);
+        CHECK(scale_popcount(scale_up(&SCALES[s]) | scale_down(&SCALES[s])) <= 12);
+    }
+    FILE *p = popen("python3 tools/gen_scales.py --print", "r");
+    char line[512];
+    unsigned rows = 0;
+    CHECK(p != NULL);
+    while (p && fgets(line, sizeof line, p)) {
+        char code[16], set[16];
+        int n;
+        if (sscanf(line, "%15s %15s %*s %*s%n", code, set, &n) < 2) { CHECK(!"print row"); continue; }
+        unsigned s = find(code), used = 0;
+        CHECK(!strcmp(SET_NAMES[SCALES[s].set], set));
+        for (const char *q = line + n; *q;) {
+            unsigned slot; double c; int k;
+            if (sscanf(q, " %u:%lf%n", &slot, &c, &k) != 2) break;
+            q += k;
+            CHECK(slot < 24 && ((scale_up(&SCALES[s]) | scale_down(&SCALES[s])) >> slot & 1U));
+            CHECK(fabs(scale_cents(&SCALES[s], slot) - c) <= 0.55);
+            ++used;
+        }
+        CHECK(used == scale_popcount(scale_up(&SCALES[s]) | scale_down(&SCALES[s])));
+        ++rows;
+    }
+    if (p) pclose(p);
+    CHECK(rows == NSCALES);
     unsigned rs = find("RAST");
     CHECK(scale_up(&SCALES[rs]) == 0x244491u && scale_down(&SCALES[rs]) == 0x144491u);
     CHECK(scale_cents(&SCALES[rs], 7) == 357 && scale_cents(&SCALES[rs], 21) == 1059);   /* 356.9 c, 1058.8 c */
