@@ -33,11 +33,11 @@ static void btn(unsigned b) { sim_control(0, b, 1); ms(30); sim_control(0, b, 0)
 static void key(unsigned k) { sim_control(1, k, 1); ms(30); sim_control(1, k, 0); ms(30); }
 static void enc(unsigned i, int v) { sim_control(2, i, v); ms(30); }
 static unsigned sub_of(void) { struct maqam_view v; maqam_page_view(0, &v); return (unsigned)v.index - 1; }
-/* SCL opens the page on the last subpage; the tests then step to the SCALE subpage (1/2). */
+/* SCL opens the page on the last subpage; the tests then step to the SCALE subpage (1/3). */
 static void open_scale(void)
 {
     btn(SCL);
-    for (unsigned i = 0; i < 2 && sub_of(); ++i) btn(SCL);
+    for (unsigned i = 0; i < 3 && sub_of(); ++i) btn(SCL);
 }
 static void open_track(void) { open_scale(); btn(SCL); }
 static void sel_track(unsigned t) { enc(0, (int)t - (int)sim_state()[0]); }
@@ -170,17 +170,21 @@ static void navigation(void)
     btn(SCL);                                    /* SCL opens the scale pages on the last subpage (first: SCALE) */
     CHECK(page() == PAGE_SCALE && sub_of() == 0);
     btn(SCL); CHECK(page() == PAGE_SCALE && sub_of() == 1);        /* and switches to TRACK */
+    btn(SCL); CHECK(page() == PAGE_SCALE && sub_of() == 2);        /* then CHORD */
+    maqam_page_view(0, &v);
+    CHECK(!strcmp(v.title, "CHORD") && v.index == 3);
     btn(SCL); CHECK(sub_of() == 0 && page() == PAGE_SCALE);        /* and back to SCALE */
-    printf("%-52s ok\n", "SCL opens, then switches 1/2 2/2 1/2");
-    enc(1, -1); CHECK(sub_of() == 1);            /* ALGORITHM wraps both ways */
+    printf("%-52s ok\n", "SCL opens, then switches 1/3 2/3 3/3 1/3");
+    enc(1, -1); CHECK(sub_of() == 2);            /* ALGORITHM wraps both ways */
     enc(1, 1); CHECK(sub_of() == 0);
-    enc(1, 1);                                   /* leave on TRACK */
+    enc(1, 1); CHECK(sub_of() == 1);
+    enc(1, 1);                                   /* leave on CHORD */
     btn(HOME);                                   /* HOME leaves */
     CHECK(page() == PAGE_OVERVIEW);
     btn(SCL);                                    /* ... and SCL returns to the last subpage */
-    CHECK(page() == PAGE_SCALE && sub_of() == 1);
+    CHECK(page() == PAGE_SCALE && sub_of() == 2);
     maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "TRACK") && v.index == 2);
+    CHECK(!strcmp(v.title, "CHORD") && v.index == 3);
     /* HOME+SCL from a scale page: the stock SCL screen (DX7 level scaling) with the stock SCL toggle */
     hold_home_scl();
     CHECK(page() == 2 /* FM_EDIT */ && sim_state()[6] == 4);
@@ -188,7 +192,7 @@ static void navigation(void)
     btn(SCL); CHECK(page() == 2 && sim_state()[6] == 4);           /* and back */
     /* HOME+SCL from the stock screen: the scale pages on the last subpage */
     hold_home_scl();
-    CHECK(page() == PAGE_SCALE && sub_of() == 1);
+    CHECK(page() == PAGE_SCALE && sub_of() == 2);
     /* the stock toggle still works after the round trip */
     hold_home_scl(); btn(SCL);
     CHECK(page() == 2 && sim_state()[6] == 5);
@@ -223,7 +227,7 @@ static void frame_cycling(void)
     ms(300);
     unsigned head = hash_rect(0, 0, 240, 32), hint = hash_rect(0, 229, 240, 11), row = hash_rect(0, 33, 240, 11);
     CHECK(ink(0, 0, 240, 29) > 200 && ink(8, 35, 230, 7) > 50 && ink(6, 231, 228, 7) > 100);
-    for (unsigned i = 1; i < 2; ++i) {
+    for (unsigned i = 1; i < 3; ++i) {
         btn(SCL); ms(300);
         CHECK(sub_of() == i);
         CHECK(hash_rect(0, 0, 240, 32) == head);            /* header: tempo, transport, mode box */
@@ -231,7 +235,7 @@ static void frame_cycling(void)
         CHECK(hash_rect(0, 33, 240, 11) != row);             /* section word and counter changed */
         row = hash_rect(0, 33, 240, 11);
     }
-    shot("scale_frame_track");
+    shot("scale_frame_chord");
     btn(SCL); ms(300);
     CHECK(sub_of() == 0 && hash_rect(0, 0, 240, 32) == head);
     printf("frame: header and hint unchanged across SCL cycling, the section row changes\n");
@@ -380,7 +384,7 @@ static void scopes(void)
     maqam_page_view(1, &v);
     has("scope knob: OWN", v.knob[0][1], "OWN");
     has("status: own scale", v.status, "TRACK 2  OWN SCALE");
-    btn(SCL);
+    btn(SCL); btn(SCL);  /* TRACK -> CHORD -> SCALE */
     enc(4, (int)rast - (int)bayat);              /* K3 SCALE on the SCALE page: only track 2 */
     CHECK(maqam_track_scale(1) == rast && maqam_track_root(1) == 4);
     CHECK(maqam_project_scale() == bayat && maqam_project_root() == 4);
@@ -447,7 +451,7 @@ static void custom_and_drums(void)
     CHECK(groove_tuning_set(0, &t) == 0);
     maqam_refresh();
     CHECK(maqam_track_scale(0) == MAQAM_CUSTOM);
-    btn(SCL);
+    btn(SCL); btn(SCL);  /* TRACK -> CHORD -> SCALE */
     enc(4, 1);
     CHECK(maqam_track_scale(0) != MAQAM_CUSTOM && maqam_overridden(0));
     /* a drum track is not tuned and nothing changes */
@@ -622,7 +626,7 @@ static void alt_page(void)
     CHECK(!memcmp(g.alt, before.alt, 12));
     /* a scale change resets the alt table (spec) */
     enc(5, 20);
-    btn(SCL);
+    btn(SCL); btn(SCL);  /* TRACK -> CHORD -> SCALE */
     enc(4, 1);
     int8_t def[GROOVE_TUNING_KEYS];
     tables(0, &g);
@@ -842,7 +846,7 @@ static void degree_row(void)
     /* the SCALE page shows the row of the selected track's own scale */
     btn(SCL);
     enc(2, 1);                                    /* OWN */
-    btn(SCL);
+    btn(SCL); btn(SCL);                           /* TRACK -> CHORD -> SCALE */
     enc(2, 4);                                    /* root D, this track only */
     maqam_page_view(0, &v);
     has("scale page: row of the track's own scale", v.lab[0], "D");
@@ -850,7 +854,7 @@ static void degree_row(void)
     CHECK(maqam_project_root() == 0);
     /* every scale: the row has one cell per degree of the union, 5..9 cells (12 for WEST CHR) */
     unsigned bad = 0;
-    btn(SCL); enc(2, -1); btn(SCL);               /* FOLLOW again: the project is edited below */
+    btn(SCL); enc(2, -1); btn(SCL); btn(SCL);     /* FOLLOW again: the project is edited below */
     for (unsigned sc = 0; sc < NSCALES; ++sc) {
         maqam_set_project(sc, 0);
         maqam_page_view(0, &v);
@@ -903,6 +907,56 @@ static void degree_row(void)
     shot("steps_bb4");
 }
 
+/* The CHORD page (task 3.2): K1 MODE, K2 TYPE, K3 INV, K4 VOICE of the selected track; the last chord, spelled, with its name. */
+static void chord_page(void)
+{
+    struct maqam_view v;
+    boot();
+    maqam_set_project(find("RAST"), 0);
+    btn(SCL); btn(SCL);                                  /* SCALE -> TRACK -> CHORD */
+    maqam_page_view(0, &v);
+    CHECK(sub_of() == 2 && !strcmp(v.title, "CHORD") && v.index == 3);
+    has("MODE label", v.knob[0][0], "MODE");  has("MODE value", v.knob[0][1], "OFF");
+    has("TYPE value", v.knob[1][1], "TRI");   has("INV value", v.knob[2][1], "ROOT");
+    has("VOICE label", v.knob[3][0], "VOICE"); has("VOICE value", v.knob[3][1], "CLOS");
+    CHECK(!v.sub[0] && !v.status[0]);                    /* no chord played yet */
+    enc(2, 1);  CHECK(maqam_chord_get(0, MAQAM_CH_MODE) == 1);
+    enc(3, 1);  CHECK(maqam_chord_get(0, MAQAM_CH_TYPE) == MAQAM_CHORD_7TH);
+    enc(4, 1);  CHECK(maqam_chord_get(0, MAQAM_CH_INV) == MAQAM_INV_1ST);
+    enc(5, 1);  CHECK(maqam_chord_get(0, MAQAM_CH_VOICE) == MAQAM_VOICE_OPEN);
+    maqam_page_view(0, &v);
+    has("MODE ON", v.knob[0][1], "ON");  has("TYPE 7TH", v.knob[1][1], "7TH");
+    has("INV 1ST", v.knob[2][1], "1ST");  has("VOICE OPEN", v.knob[3][1], "OPEN");
+    for (unsigned i = 0; i < 8; ++i) { enc(3, 1); enc(4, 1); enc(5, 1); }   /* each stops at its last value */
+    maqam_page_view(0, &v);
+    has("TYPE clamps at JINS", v.knob[1][1], "JINS");  has("INV clamps at AUTO", v.knob[2][1], "AUTO");
+    has("VOICE clamps at BASS", v.knob[3][1], "BASS");
+    for (unsigned i = 0; i < 8; ++i) { enc(2, -1); enc(3, -1); enc(4, -1); enc(5, -1); }
+    CHECK(maqam_chord_get(0, MAQAM_CH_MODE) == 0 && maqam_chord_get(0, MAQAM_CH_TYPE) == 0 &&
+          maqam_chord_get(0, MAQAM_CH_INV) == 0 && maqam_chord_get(0, MAQAM_CH_VOICE) == 0);
+    /* settings belong to the selected track */
+    sel_track(2);  enc(2, 1);
+    CHECK(maqam_chord_get(2, MAQAM_CH_MODE) == 1 && maqam_chord_get(0, MAQAM_CH_MODE) == 0);
+    maqam_page_view(2, &v);  has("track 3 MODE ON", v.knob[0][1], "ON");
+    sel_track(0);
+    enc(2, 1);                                           /* chord mode on track 1, TRIAD / ROOT / CLOSE */
+    /* the C key on a Rast track plays C Ed G; the page shows it spelled with its name */
+    key(7);
+    maqam_page_view(0, &v);
+    has("last chord spelled", v.sub, "C E" MAQAM_HF " G");
+    has("last chord name", v.status, "NEU");
+    ms(300);
+    CHECK(ink(8, 46, 224, 16) > 100 && ink(8, 66, 224, 8) > 20);   /* the chord (large) and its name are painted */
+    shot("scale_chord_rast");
+    printf("%-52s ok\n", "CHORD page: C Ed G / NEU after the C key in Rast");
+    /* a drum track has no chord mode: the knobs do not move */
+    sel_track(7);
+    enc(2, 1);
+    CHECK(maqam_chord_get(7, MAQAM_CH_MODE) == 0);
+    sel_track(0);
+    printf("CHORD page: knobs MODE TYPE INV VOICE per track, clamped, drum tracks refuse\n");
+}
+
 int main(void)
 {
     navigation();
@@ -917,6 +971,7 @@ int main(void)
     degree_row();
     undo_labels();
     pixels();
+    chord_page();
     printf(failures ? "FAILED: %d\n" : "pages_test: all ok\n", failures);
     return failures != 0;
 }

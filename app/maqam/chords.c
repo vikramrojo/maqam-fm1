@@ -45,6 +45,80 @@ MAQAM_SMALL unsigned maqam_chord_last(unsigned track, uint8_t out[8])
     return last[track].n;
 }
 
+/* Interval names (M6): the notes' tuned pitches in quarter tones above the lowest, against fixed shapes. */
+static const char NAMES[][5] = {"5TH", "8VA", "5+8", "SUS2", "SUS4", "ADD9", "JINS", "SUB", "MIN", "NEU", "MAJ", "SUP", "CUST", "DOM"};
+/* name << 29 | one bit per note above the lowest, at its quarter tones */
+static const uint32_t FIXED[8] = {0x00004000, 0x00000400, 0x21000000, 0x41004000, 0x41000400, 0x60004010, 0x80004400, 0xB0004100};
+MAQAM_SMALL void maqam_chord_name(unsigned track, unsigned alt, const uint8_t *notes, unsigned n, char out[8])
+{
+    struct groove_tuning g;
+    int base = 0, hi = 0;
+    unsigned id = 12, m = 0, all = 0;   /* m: the shape above the lowest note; all: the pitch classes mod an octave (24) */
+    if (n < 2 || n > NOTES) { strcpy(out, "SINGLE"); return; }
+    maqam_engine_get(track, &g);
+    for (unsigned i = 0; i < n; ++i) {
+        int p = notes[i] * 100 + (alt ? g.alt : g.main)[notes[i] % 12U];
+        if (!i) base = p;
+        hi = (p - base + 25) / 50;
+        all |= 1U << (unsigned)hi % 24U;
+        if (i) m |= 1U << (hi < 29 ? hi : 0);
+    }
+    for (unsigned i = 0; i < 8; ++i)
+        if (!((FIXED[i] ^ m) << 3)) { id = FIXED[i] >> 29; goto done; }
+    if (n == 4 && hi <= 10) { id = 6; goto done; }
+    for (unsigned d = 0; d < 5; ++d) {    /* the fifth nearest 700 c first: E G C is C major, not E minor-plus */
+        unsigned h = 14 + (d & 1 ? (d + 1) / 2 : -(d / 2));
+        for (unsigned k = 0; k < 24; ++k) {   /* each pitch class as the root: third 5-9, fifth 12-16, seventh 19-22 (18 = none) */
+            unsigned r = (all >> k | all << (24 - k)) & 0xFFFFFFU;
+            for (unsigned t = 5; t < 10; ++t)
+                for (unsigned v = 18; v < 23; ++v)
+                    if (all >> k & 1U && r == (1U | 1U << t | 1U << h | (v > 18 ? 1U << v : 0))) {
+                        char *q = out + 3;
+                        memcpy(out, NAMES[t == 8 && v == 20 ? 13 : t + 2], 3);
+                        if (h != 14) *q++ = h < 14 ? '-' : '+';
+                        if (v > 18) *q++ = '7';
+                        *q = 0;
+                        return;
+                    }
+        }
+    }
+done:
+    strcpy(out, NAMES[id]);
+}
+/* Replaces the stock name in out by the interval name of step `step`'s chord, on a melodic track. */
+MAQAM_SMALL void maqam_step_chord_name(unsigned track, unsigned step, char out[8])
+{
+    struct groove_view w = {0};
+    struct groove_sequence_options o;
+    uint8_t n[NOTES] = {0};
+    if (!maqam_melodic(track)) return;
+    groove_get_view(track, step, &w);
+    groove_sequence_options_copy(&o);
+    unsigned id = w.step.drums & 31U, c = id ? o.chord[id - 1][0] : 1;
+    for (unsigned i = 0; i < c && i < NOTES; ++i) n[i] = (uint8_t)(w.step.note + (i ? o.chord[id - 1][i] : 0));
+    maqam_chord_name(track, w.step.drums >> 13 & 1U, n, c, out);
+}
+
+/* Trailer bytes [5..6]: chord-mode mask; type | inv << 3 | voice << 6 of the lowest chord-mode track. */
+MAQAM_SMALL void maqam_chords_save(uint8_t t[2])
+{
+    t[0] = t[1] = 0;
+    for (unsigned k = GROOVE_TRACKS; k--;)   /* ends on the lowest-numbered track in chord mode */
+        if (set[k][0]) { t[0] |= (uint8_t)(1U << k); t[1] = (uint8_t)(set[k][1] | set[k][2] << 3 | set[k][3] << 6); }
+}
+MAQAM_SMALL int maqam_chords_load(const uint8_t t[2], unsigned apply)
+{
+    unsigned b = t[1];
+    if ((b & 7U) > MAQAM_CHORD_JINS || (b >> 3 & 7U) > MAQAM_INV_AUTO || b >> 6 > MAQAM_VOICE_BASS) return -1;
+    for (unsigned k = 0; k < GROOVE_TRACKS && apply; ++k) {
+        set[k][0] = t[0] >> k & 1U;
+        set[k][1] = b & 7U;
+        set[k][2] = b >> 3 & 7U;
+        set[k][3] = (uint8_t)(b >> 6);
+    }
+    return 0;
+}
+
 MAQAM_SMALL static void sort(int16_t *b, unsigned n)
 {
     for (unsigned i = 1; i < n; ++i)

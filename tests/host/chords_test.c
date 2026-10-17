@@ -399,6 +399,88 @@ static void recording(void)
     printf("recording: C E G stored as one chord step (root + offsets 4 7); full table gives edit error 2\n");
 }
 
+/* Interval names (task 3.1): from the tuned pitches, 50 c steps from the lowest note. */
+static const char *named(unsigned alt, unsigned n, const uint8_t *notes)
+{
+    static char out[12];
+    maqam_chord_name(0, alt, notes, n, out);
+    return out;
+}
+#define NAMED(alt, want, ...) do { const uint8_t nn_[] = {__VA_ARGS__}; const char *g_ = named(alt, sizeof nn_, nn_); \
+    if (strcmp(g_, want)) { printf("FAIL %s:%d: '%s' want '%s'\n", __FILE__, __LINE__, g_, want); ++failures; } } while (0)
+
+static void names(void)
+{
+    /* the same semitone stack C E G: neutral in Rast, major in WEST */
+    boot("RAST", 0);
+    NAMED(0, "NEU", 60, 64, 67);
+    boot("MAJ", 0);
+    NAMED(0, "MAJ", 60, 64, 67);
+    NAMED(0, "MIN-", 59, 62, 65);              /* B D F */
+    NAMED(0, "MAJ", 64, 67, 72);               /* E G C: an inversion keeps its name */
+    NAMED(0, "MIN", 60, 63, 67);
+    NAMED(0, "MAJ+", 60, 64, 68);
+    NAMED(0, "MAJ7", 60, 64, 67, 71);
+    NAMED(0, "MIN7", 60, 63, 67, 70);
+    NAMED(0, "DOM7", 60, 64, 67, 70);
+    NAMED(0, "DOM7", 64, 67, 70, 72);          /* an inversion of it */
+    NAMED(0, "MAJ", 48, 60, 64, 67);           /* a doubled root (BASS voicing) is still the triad */
+    NAMED(0, "SINGLE", 60);
+    NAMED(0, "5TH", 60, 67);  NAMED(0, "5TH", 67, 72);   /* root position and inverted */
+    NAMED(0, "8VA", 60, 72);
+    NAMED(0, "5+8", 60, 67, 72);  NAMED(0, "5+8", 67, 72, 79);
+    NAMED(0, "SUS2", 60, 62, 67);
+    NAMED(0, "SUS4", 60, 65, 67);
+    NAMED(0, "ADD9", 60, 64, 67, 74);
+    NAMED(0, "CUST", 60, 61, 62, 63, 64);
+    NAMED(0, "CUST", 60, 64);
+    /* tunings the semitone stack does not show: neutral seventh and a four-note jins */
+    struct groove_tuning g;
+    memset(&g, 0, sizeof g);
+    g.main[4] = -50; g.main[11] = -50;         /* E 350 c, B 1050 c */
+    CHECK(groove_tuning_set(0, &g) == 0);
+    NAMED(0, "NEU7", 60, 64, 67, 71);
+    memset(&g, 0, sizeof g);
+    g.main[1] = 50;                            /* C# 150 c */
+    CHECK(groove_tuning_set(0, &g) == 0);
+    NAMED(0, "JINS", 60, 61, 63, 65);          /* 0 150 300 500 */
+    memset(&g, 0, sizeof g);
+    g.main[4] = -5; g.main[7] = 20; g.alt[4] = -50;   /* rounding to 50 c; the alt table for an alt step */
+    CHECK(groove_tuning_set(0, &g) == 0);
+    NAMED(0, "MAJ", 60, 64, 67);
+    g.main[4] = 0;
+    CHECK(groove_tuning_set(0, &g) == 0);
+    NAMED(1, "NEU", 60, 64, 67);               /* an alt step reads the alt table */
+    NAMED(0, "MAJ", 60, 64, 67);
+    /* the 12 stock chords in WEST major: none CUST */
+    boot("MAJ", 0);
+    static const char *const stock[12] = {"MAJ", "MIN", "MAJ7", "MIN7", "DOM7", "SUS2", "SUS4", "MIN-", "MAJ+", "5TH", "8VA", "ADD9"};
+    struct groove_sequence_options o;
+    groove_sequence_options_copy(&o);
+    for (unsigned id = 0; id < 12; ++id) {
+        uint8_t n[8];
+        unsigned c = o.chord[id][0];
+        for (unsigned i = 0; i < c; ++i) n[i] = (uint8_t)(60 + (i ? o.chord[id][i] : 0));
+        const char *got = named(0, c, n);
+        if (strcmp(got, stock[id])) { printf("FAIL stock chord %u: '%s' want '%s'\n", id, got, stock[id]); ++failures; }
+    }
+    /* the step page: melodic tracks get interval names, drum tracks keep the stock name */
+    boot("RAST", 0);
+    char v[12] = "MAJOR";
+    uint8_t cm[3] = {60, 64, 67};
+    CHECK(groove_sequence_chord(0, 0, cm, 3, 100) == 0);
+    maqam_step_chord_name(0, 0, v);
+    CHECK(!strcmp(v, "NEU"));
+    strcpy(v, "SINGLE");
+    maqam_step_chord_name(0, 1, v);
+    CHECK(!strcmp(v, "SINGLE"));
+    CHECK(sim_select(0, GROOVE_808) == 0);
+    strcpy(v, "MAJOR");
+    maqam_step_chord_name(0, 0, v);
+    CHECK(!strcmp(v, "MAJOR"));
+    printf("names: NEU/MAJ by tuning, MIN-, inversions, sevenths, fixed shapes, jins, 12 stock chords, step page\n");
+}
+
 int main(void)
 {
     types();
@@ -408,6 +490,7 @@ int main(void)
     overlap();
     alt_and_drums();
     recording();
+    names();
     printf(failures ? "FAILED: %d\n" : "chords_test: all ok\n", failures);
     return failures != 0;
 }
