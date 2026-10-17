@@ -115,9 +115,16 @@ static void white(void)
     rec_on();
     key(19, 30); key(18, 30); ms(1100); key(18, 30);
     CHECK(step_note(1) == 70 && step_note(2) == 71);
-    /* the per-track layout overrides the project default */
+    /* a track with its own scale has its own layout: a copy of the project's at first, then independent; a
+       following track always plays the project layout */
     boot("RAST", 0, MAQAM_WHITE);
+    CHECK(maqam_set_layout(1, MAQAM_CHROM) == 0 && maqam_layout(1) == MAQAM_WHITE);   /* follows: ignored */
+    CHECK(maqam_set_override(0, rast, 0) == 0 && maqam_layout(0) == MAQAM_WHITE);       /* the copy */
     CHECK(maqam_set_layout(0, MAQAM_CHROM) == 0 && maqam_layout(0) == MAQAM_CHROM);
+    CHECK(maqam_set_default_layout(MAQAM_SNAP) == 0 && maqam_layout(0) == MAQAM_CHROM && maqam_layout(1) == MAQAM_SNAP);
+    CHECK(maqam_clear_override(0) == 0 && maqam_layout(0) == MAQAM_SNAP);              /* back to the project's */
+    CHECK(maqam_set_override(0, rast, 0) == 0 && maqam_layout(0) == MAQAM_SNAP);        /* a fresh copy */
+    CHECK(maqam_set_default_layout(MAQAM_WHITE) == 0 && maqam_set_layout(0, MAQAM_CHROM) == 0);
     rec_on();
     key(8, 30);
     CHECK(step_note(0) == 61);

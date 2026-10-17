@@ -50,7 +50,7 @@ MAQAM_SMALL unsigned maqam_layout(unsigned track)
 {
     unsigned s, r;
     if (track >= GROOVE_TRACKS || !assignment(track, &s, &r)) return MAQAM_CHROM;
-    return lay[track] == FOLLOW ? maqam_default_layout() : lay[track];
+    return (unsigned)maqam_layout_raw(track);
 }
 MAQAM_SMALL int maqam_set_layout(unsigned track, int layout)
 {
@@ -59,7 +59,10 @@ MAQAM_SMALL int maqam_set_layout(unsigned track, int layout)
     return 0;
 }
 
-MAQAM_SMALL int maqam_layout_raw(unsigned track) { return track < GROOVE_TRACKS && lay[track] != FOLLOW ? lay[track] : -1; }
+MAQAM_SMALL int maqam_layout_raw(unsigned track)
+{
+    return track < GROOVE_TRACKS && maqam_overridden(track) && lay[track] != FOLLOW ? lay[track] : (int)maqam_default_layout();
+}
 MAQAM_SMALL unsigned maqam_last_descending(unsigned track) { return track < GROOVE_TRACKS && dir[track].have && dir[track].desc; }
 
 MAQAM_SMALL static unsigned in_range(int m) { return m >= 0 && m <= 127; }

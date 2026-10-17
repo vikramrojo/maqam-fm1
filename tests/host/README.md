@@ -166,7 +166,7 @@ PNGs `scale_row_bayati`, `scale_row_rast`, `scale_alt_bayati` and `steps_bb4` in
 ## Scale page screenshots
 
 `tests/host/scale_shots.c` renders edge cases of the scale pages (Rast up/down, Hijaz, Sikah on Ed, Suznak's
-9 degrees, pentatonic, chromatic, Bb major, a fallback root, quarter-tone roots, PSYCH, JINS, track override,
-CUSTOM, KEYS, ALT extremes, REDUCE SAMPLE BANK, the overview header tag, the stock DX7 scaling and curves screens for comparison) to `build/host/shots/*.png`. It is not a test, so
+9 degrees, pentatonic, chromatic, Bb major, a fallback root, quarter-tone roots, PSYCH, JINS, own-scale track,
+CUSTOM, drums, TRACK page with FOLLOW/OWN layouts, alt extremes, REDUCE SAMPLE BANK, the overview header tag, the stock DX7 scaling and curves screens for comparison) to `build/host/shots/*.png`. It is not a test, so
 `build.sh` skips it; build it with the same command as a test, adding `tests/host/scale_shots.c` and
 `-I tests/host`, then run `build/host/scale_shots` from the repository root.

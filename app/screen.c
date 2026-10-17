@@ -1391,7 +1391,7 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
 {
     uint32_t sig = signature(7U, m, sizeof *m);
     sig = signature(sig, &track, sizeof track);
-    uint32_t row = (track << 4) | m->index;     /* the section row, as fm_draw's: T1 DX7  PROJECT  1/4 */
+    uint32_t row = (track << 4) | m->index;     /* the section row, as fm_draw's: T1 DX7  SCALE  1/2 */
     if (cache->title_cache != row) {
         static const char *const source[GROOVE_SOURCES] = {"DX7", "303", "808", "PSG", "PLUK", "SMPL"};
         cache->title_cache = row;
@@ -1401,7 +1401,7 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
         text(30, 35, source[groove_source_type(track)], 1, TEXT, BACK);
         text(64, 35, m->title, 1, colors[track], BACK);
         number(206, 35, m->index, 1, 1, TEXT, BACK);
-        text(212, 35, "/4", 1, DIM, BACK);
+        text(212, 35, "/2", 1, DIM, BACK);
     }
     if (cache->middle_cache != sig) {
         cache->middle_cache = sig;
@@ -1428,7 +1428,7 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
                 text((unsigned)((int)x + ((int)w - 6 * (int)n) / 2), 117 + (cells > 9 ? 9 * (i & 1U) : 0), out, 1, c ? TEXT : DIM, BACK); /* 12 cells: staggered, -127 is wider than its key */
             }
         }
-        for (unsigned i = 0; i < 2; ++i)          /* ALT page: the alt and main readouts */
+        for (unsigned i = 0; i < 2; ++i)          /* TRACK page: the alt and main readouts */
             text(8, drop + (i ? 164U : 134U), m->line[i], 2 - i, i ? DIM : TEXT, BACK);
         if (m->warn[0]) text(8, 182, m->warn, 1, AMBER, BACK);
     }
