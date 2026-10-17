@@ -666,24 +666,35 @@ static __attribute__((noinline)) void steps(const struct groove_view *v)
         }
     }
     uint64_t lane = groove_pad_count(track) != 0 ? groove_drum_steps(track, drum) : v->active_steps;
+    /* maqam: the name of a tile depends on the track's scale, root and table entry; it is formatted on a cache miss only */
+    struct groove_tuning tuning = {{0}, {0}};
+    uint8_t name_key[4] = {MAQAM_CUSTOM, 0, 0, 0};
+    if (maqam_melodic(track)) {
+        maqam_engine_get(track, &tuning);
+        name_key[0] = (uint8_t)maqam_track_scale(track);
+        name_key[1] = (uint8_t)maqam_track_root(track);
+    }
     for (unsigned i = 0; i < 16; ++i) {
         unsigned step = first + i;
         unsigned x = 8 + (i % 4) * 57, y = 72 + (i / 4) * 29;
         if (paint_rendering && (y >= paint_top + PAINT_ROWS || y + 25 <= paint_top)) continue;
         unsigned on = (unsigned)((lane >> step) & 1U), head = v->playing && v->play_step == step;
+        unsigned alt = (frame_step_alt >> i) & 1U;
         uint32_t sig = step | (on << 6) | (head << 7) | ((step == cursor) << 8) |
                        ((uint32_t)frame_step_notes[i] << 9) | (track << 16) | (drum << 19);
+        name_key[2] = (uint8_t)(alt ? tuning.alt : tuning.main)[frame_step_notes[i] % 12U];
+        name_key[3] = (uint8_t)alt;
+        sig = signature(sig, name_key, sizeof name_key);
+        if (sig == cache->tile_cache[i])
+            continue;
+        cache->tile_cache[i] = sig;
         char label[12];
         if (!on)
             strcpy(label, "-");
         else if (groove_pad_count(track) != 0)
             strcpy(label, "HIT");
         else /* maqam: 24-tone name from the track's table (alt table and a '.' mark for alt steps) */
-            maqam_note_name(track, frame_step_notes[i], (frame_step_alt >> i) & 1U, label);
-        sig = signature(sig, label, (unsigned)strlen(label)); /* a table edit changes the name */
-        if (sig == cache->tile_cache[i])
-            continue;
-        cache->tile_cache[i] = sig;
+            maqam_note_name(track, frame_step_notes[i], alt, label);
         uint16_t bg = on ? colors[track] : PANEL, fg = on ? BACK : TEXT;
         paint_fill(x, y, 53, 25, bg);
         if (step == cursor)
@@ -1394,18 +1405,17 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
             text(x + (w - 1 - 6 * len) / 2, 87, m->lab[i], 1, lit ? BACK : DIM, bg);
             if (cents) {
                 int c = m->cents[i];
-                char out[6];
-                unsigned n = maqam_cents_text(c, out);
+                char out[12];
+                unsigned n = maqam_num(out, c, c > 0);
                 text((unsigned)((int)x + ((int)w - 6 * (int)n) / 2), 105 + (cells > 9 ? 9 * (i & 1U) : 0), out, 1, c ? TEXT : DIM, BACK); /* 12 cells: staggered, -127 is wider than its key */
             }
         }
-        for (unsigned i = 0; i < 3; ++i)
-            text(8, drop + (m->big ? (i ? 152U + 14U * (i - 1U) : 122U) : 124U + 14U * i), m->body[i],
-                 m->big && !i ? 2 : 1, i ? DIM : TEXT, BACK);
+        for (unsigned i = 0; i < 2; ++i)          /* ALT page: the alt and main readouts */
+            text(8, drop + (i ? 152U : 122U), m->line[i], 2 - i, i ? DIM : TEXT, BACK);
         if (m->warn[0]) text(8, 182, m->warn, 1, AMBER, BACK);
     }
     for (unsigned i = 0; i < 4; ++i)
-        if (m->knob[i][0][0]) knob(i, m->knob[i][0], m->knob[i][1], colors[i]);
+        if (m->knob[i][0]) knob(i, m->knob[i][0], m->knob[i][1], colors[i]);
         else if (cache->foot_cache[i] != 1U) { cache->foot_cache[i] = 1U; paint_fill(6 + 59 * i, 195, 54, 32, BACK); }
     if (cache->hint_cache != 1U) {
         cache->hint_cache = 1U;
@@ -1933,6 +1943,7 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
     if ((controls->buttons & (BUTTON(HOME) | BUTTON(SAVE))) == (BUTTON(HOME) | BUTTON(SAVE)) &&
         (pressed & (BUTTON(HOME) | BUTTON(SAVE)))) {
         int r = groove_edit_undo();
+        maqam_refresh(); /* maqam: undo/redo restores the engine tables; re-derive the scale labels */
         notice = r ? "NOTHING TO UNDO / STOP REC FIRST" : "UNDO / REDO APPLIED";
         notice_until = now + 2000U;
         page = music_page;
@@ -2162,7 +2173,7 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
             }
             else if (action <= 10) r = groove_edit_clear(track, cursor, action - 8);
             else if (action <= 13) r = groove_edit_repeat(track, (action - 9) * 16);
-            else if (action == 14) r = groove_edit_undo();
+            else if (action == 14) { r = groove_edit_undo(); maqam_refresh(); /* maqam: */ }
             else if (action == 15) { r = groove_timbre_export(track, (uint8_t *)&tone_clip, sizeof tone_clip); tone_clip_ready = !r; }
             else if (action == 16) r = tone_clip_ready ? groove_timbre_import(track, (uint8_t *)&tone_clip, sizeof tone_clip) : -1;
             else if (action == 17) {
@@ -2209,7 +2220,6 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
                     paint_next = 180U / PAINT_ROWS;
                     paint_flush();
                     project_result = groove_project_save_slot(project_slot);
-                    maqam_page_save_result(project_result); /* maqam: */
                     project_operation = 1;
                     project_refresh();
                 }
@@ -2550,7 +2560,9 @@ controls_done:
         unsigned note = groove_key_note(track, key, octave);
         if (maqam_melodic(track)) { /* maqam: layout + direction; a sounding key keeps its note */
             if (key_note[key] != 0xff && key_track[key] == track) note = key_note[key];
-            else if (!mode && (keys & (1U << key))) note = maqam_key_press(track, key, octave, now);
+            else if (!mode && (keys & (1U << key))) /* a held key only follows the direction; only a new press moves it */
+                note = (key_down & (1U << key)) ? maqam_key_press(track, key, octave, now)
+                                                : maqam_key_note(track, key, octave, maqam_last_descending(track));
         }
         if (key_note[key] != 0xff &&
             (mode || !(keys & (1U << key)) || key_note[key] != note || key_track[key] != track)) {

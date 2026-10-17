@@ -9,11 +9,12 @@ static struct {
     uint8_t tscale[GROOVE_TRACKS], troot[GROOVE_TRACKS];   /* a track's own scale, valid if its over bit is set */
 } st = {0, 0, 1, 0, 0, {0}, {0}};
 
-MAQAM_SMALL void maqam_init(void) { memset(&st, 0, sizeof st); st.trad = 1; maqam_keys_reset(); maqam_page_save_result(0); }
+MAQAM_SMALL static void st_reset(void) { memset(&st, 0, sizeof st); st.trad = 1; }
+MAQAM_SMALL void maqam_init(void) { st_reset(); maqam_keys_reset(); maqam_page_save_result(0); }
 MAQAM_SMALL unsigned maqam_default_layout(void) { return st.layout; }
 MAQAM_SMALL int maqam_set_default_layout(unsigned l)
 {
-    if (l > MAQAM_WHITE) return -1;
+    if (l > MAQAM_CHROM) return -1;
     if (st.layout != l) { st.layout = (uint8_t)l; maqam_engine_touch(); }
     return 0;
 }
@@ -122,12 +123,12 @@ MAQAM_SMALL static int trailer_ok(const uint8_t *t)
 }
 /* The engine tables decide: a track whose main table is not the project scale's gets its own label by
    matching the library (first hit in index order), else CUSTOM, and its tables are left untouched. */
-MAQAM_SMALL void maqam_project_loaded(const uint8_t *t)
+MAQAM_SMALL static void derive(const uint8_t *t)
 {
     struct groove_tuning g[GROOVE_TRACKS];
     int8_t want[GROOVE_TUNING_KEYS];
     unsigned over = 0;
-    maqam_init();
+    st_reset();
     if (trailer_ok(t)) {
         st.scale = t[1]; st.root = t[2]; st.trad = t[3] & 1U; st.layout = t[3] >> 1 & 3U;
         over = t[4];
@@ -144,6 +145,7 @@ MAQAM_SMALL void maqam_project_loaded(const uint8_t *t)
         st.troot[i] = (uint8_t)r;
     }
 }
+MAQAM_SMALL void maqam_project_loaded(const uint8_t *t) { maqam_init(); derive(t); }
 MAQAM_SMALL void maqam_refresh(void)
 {
     uint8_t t[MAQAM_TRAILER_BYTES];
@@ -151,7 +153,7 @@ MAQAM_SMALL void maqam_refresh(void)
     struct groove_tuning g[GROOVE_TRACKS];
     __typeof__(st) old = st;
     maqam_project_save(t);
-    maqam_project_loaded(t);
+    derive(t);                                     /* not maqam_init: the key layouts and the save warning stay */
     if (maqam_engine_capture(g)) return;
     for (unsigned i = 0; i < GROOVE_TRACKS; ++i)   /* keep a label that still describes the table */
         if ((old.over >> i & 1U) && (st.over >> i & 1U) && old.tscale[i] != MAQAM_CUSTOM &&

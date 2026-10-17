@@ -7,6 +7,7 @@
 #include "tuning_test.c"
 #include "../../app/maqam/maqam.h"
 #include "../../app/maqam/scales.h"
+#include <ctype.h>
 #include <stdlib.h>
 
 void sim_control(unsigned kind, unsigned index, int value);
@@ -21,7 +22,7 @@ enum { PAGE_OVERVIEW = 0, PAGE_PROJECT = 8, PAGE_SCALE = 19 };    /* screen.c pa
 static unsigned find(const char *code)
 {
     for (unsigned i = 0; i < NSCALES; ++i)
-        if (!strcmp(SCALES[i].code, code)) return i;
+        if (!strcmp(SCALE_CODE_STR[i], code)) return i;
     printf("FAIL no scale %s\n", code);
     ++failures;
     return 0;
@@ -56,9 +57,20 @@ static void expect_main(unsigned t, unsigned scale, unsigned root, unsigned trad
     printf("%-52s %s\n", what, ok ? "ok" : "FAIL");
     if (!ok) ++failures;
 }
+/* The view text is mixed case; screen.c draws it uppercase, so the comparison ignores case. */
+static int has_nocase(const char *got, const char *want)
+{
+    size_t n = strlen(want);
+    for (; *got; ++got) {
+        size_t i = 0;
+        while (i < n && got[i] && toupper((unsigned char)got[i]) == toupper((unsigned char)want[i])) ++i;
+        if (i == n) return 1;
+    }
+    return n == 0;
+}
 static void has(const char *what, const char *got, const char *want)
 {
-    int ok = strstr(got, want) != NULL;
+    int ok = has_nocase(got, want);
     printf("%-52s \"%s\" %s\n", what, got, ok ? "ok" : "FAIL");
     if (!ok) ++failures;
 }
@@ -336,11 +348,17 @@ static void keys_page(void)
 
 /* The cents row: every value -127..+127 fits its box and no two boxes on one line meet; painted ink of
    each non-zero entry lies inside its own box. */
+static unsigned cents_text(int c, char *out) { return maqam_num(out, c, c > 0); }   /* as screen.c draws it */
+static void maqam_cents_pos(unsigned key, unsigned len, int *x, unsigned *y)   /* top-left pixel, as screen.c places it */
+{
+    *x = 6 + (int)key * 19 + (19 - 6 * (int)len) / 2;
+    *y = 105U + 9U * (key & 1U);
+}
 static void cents_layout(const struct maqam_view *v)
 {
-    char t[6];
+    char t[12];
     for (int c = -127; c <= 127; ++c) {
-        unsigned n = maqam_cents_text(c, t);
+        unsigned n = cents_text(c, t);
         CHECK(n >= 1 && n <= 4 && (int)strlen(t) == (int)n);
         for (unsigned a = 0; a < 12; ++a) {
             int xa, xb;
@@ -356,14 +374,14 @@ static void cents_layout(const struct maqam_view *v)
     }
     for (unsigned k = 0; k < 12; ++k) {
         int x;
-        unsigned y, n = maqam_cents_text(v->cents[k], t);
+        unsigned y, n = cents_text(v->cents[k], t);
         maqam_cents_pos(k, n, &x, &y);
         unsigned inside = ink((unsigned)x, y, 6 * n, 7);
         unsigned band = ink(0, y, 240, 7);      /* the whole line: nothing outside the boxes on it */
         unsigned others = 0;
         for (unsigned j = (k & 1U); j < 12; j += 2) {
             int xj;
-            unsigned yj, nj = maqam_cents_text(v->cents[j], t);
+            unsigned yj, nj = cents_text(v->cents[j], t);
             maqam_cents_pos(j, nj, &xj, &yj);
             others += ink((unsigned)xj, yj, 6 * nj, 7);
         }
@@ -392,9 +410,10 @@ static void alt_page(void)
     CHECK(g.alt[4] == -100);
     CHECK(!memcmp(g.main, before.main, 12));     /* main untouched */
     maqam_page_view(0, &v);
-    has("signed cents readout", v.body[0], "-100");
-    has("name of the resulting pitch (Eb)", v.body[0], "E" MAQAM_FLAT "4");
-    has("main entry shown too", v.body[1], "MAIN ");
+    has("signed cents readout", v.line[0], "-100");
+    has("name of the resulting pitch (Eb)", v.line[0], "E" MAQAM_FLAT "4");
+    has("main entry shown too", v.line[1], "MAIN ");
+    has("alt knob value is signed", v.knob[1][1], "-100");
     enc(4, 2);                                   /* K3: +20 */
     tables(0, &g);
     CHECK(g.alt[4] == -80);
@@ -531,7 +550,43 @@ static void reduce_bank(void)
     CHECK(page() == PAGE_SCALE);                 /* a good save returns to the page it came from */
     ms(300);
     CHECK(ink(8, 182, 224, 8) == 0);
+    /* a save by any path updates it: groove_project_save_slot itself (SysEx saves, transfer.c) sets and clears the warning */
+    maqam_init();
+    maqam_page_view(0, &v);
+    CHECK(!v.warn[0]);
+    maqam_set_project(find("RAST"), 0);
+    CHECK(groove_project_save_slot(0) == GROOVE_PROJECT_TUNING_SPACE);
+    maqam_page_view(0, &v);
+    has("direct refused save sets the warning", v.warn, "REDUCE SAMPLE BANK");
+    maqam_set_project(find("MAJ"), 0);
+    CHECK(groove_project_save_slot(0) == 0);
+    maqam_page_view(0, &v);
+    CHECK(!v.warn[0]);
     printf("sample bank: a refused save shows REDUCE SAMPLE BANK on the scale page; a good save clears it\n");
+}
+
+/* Undo restores the engine tables: the track labels follow them (both undo call sites call maqam_refresh). */
+static void undo_labels(void)
+{
+    boot();
+    unsigned rast = find("RAST"), bayat = find("BAYAT");
+    maqam_set_project(rast, 0);
+    ms(50);
+    groove_edit_checkpoint(0x1234);              /* the state undo returns to: Rast on C everywhere */
+    maqam_set_project(bayat, 4);
+    CHECK(maqam_track_scale(0) == bayat && maqam_track_root(0) == 4);
+    sim_control(0, HOME, 1); ms(30);             /* HOME + SAVE: undo */
+    sim_control(0, SAVE, 1); ms(30);
+    sim_control(0, SAVE, 0); sim_control(0, HOME, 0); ms(100);
+    for (unsigned t = 0; t < GROOVE_TRACKS; ++t) {
+        if (!maqam_melodic(t)) continue;
+        struct groove_tuning g;
+        int8_t want[GROOVE_TUNING_KEYS];
+        tables(t, &g);
+        CHECK(maqam_main(maqam_track_scale(t), maqam_track_root(t), maqam_trad(), want) == 0 && !memcmp(g.main, want, sizeof want));
+        CHECK(maqam_track_scale(t) == rast && maqam_track_root(t) == 0);
+    }
+    printf("undo (HOME+SAVE): the track labels match the restored tables\n");
 }
 
 static void pixels(void)
@@ -687,6 +742,7 @@ int main(void)
     alt_page();
     reduce_bank();
     degree_row();
+    undo_labels();
     pixels();
     printf(failures ? "FAILED: %d\n" : "pages_test: all ok\n", failures);
     return failures != 0;

@@ -108,7 +108,8 @@ intonation toggle, per-track override, V13 undo plus `maqam_refresh`, the 8-byte
 (round trip, staging copy, settings-only rewrite, unchanged save writes nothing, record CRC and
 fields as V13 writes them), stock projects without a trailer (defaults; tables kept and scale
 derived), and table -> scale matching (Bayati on D recovered; hand-edited tables show CUSTOM and
-stay unchanged). EQUAL tables are shared by scales with the same slot mask, so a recovered label
+stay unchanged), the packed scale record (29 bytes, `scale_cents` against the generator's exact
+cents). EQUAL tables are shared by scales with the same slot mask, so a recovered label
 there is the first scale in index order with that table.
 
 ## Keys test
@@ -118,6 +119,7 @@ there is the first scale in index order with that table.
 entry) and reading the sequence. It covers SNAP (C# to D up, D# to D down, 1 s reset, CHROM), WHITE
 (Rast C4..C5, B-flat descending, black keys silent), the layout default in the trailer, the OCT alt
 gesture (measured E at the main versus alt pitch, recorded step with the alt bit and its playback),
+a silent black key held past the 1 s window does not extend the direction state (only the press counts),
 double-tap octave (150 ms yes, slow no, key between no, clamp), drum tracks unchanged, and key lights.
 
 ## Names test
@@ -141,7 +143,8 @@ keys and OCT-/OCT+ + key as root, subtitle `Ed arab sikah trad` with the arrow o
 hint without moving the root); page 2 (override on/off, root, scale, CUSTOM kept, other tracks follow, drums
 untouched); page 3 (project and track layouts); page 4 (key pick, +/-1 and +/-10 cents with clamp, the cents
 readout and 24-tone name, reset, other tracks and drums untouched); a stored over-size sample bank, where a refused
-save shows `REDUCE SAMPLE BANK` on the scale page and a good save clears it; and painted pixels (title, subtitle,
+save shows `REDUCE SAMPLE BANK` on the scale page and a good save clears it (also for a direct
+`groove_project_save_slot` call, the SysEx path); undo (HOME+SAVE) re-derives the track labels from the restored tables; and painted pixels (title, subtitle,
 home hint, alt readout; the subtitle repaints on a scale change). It writes 2x PNG screenshots of the real
 framebuffer (`sim_pixels`) to `build/host/` (`scale_*.png`, `steps_alt_mark.png`, `project_reduce_bank.png`).
 

@@ -20,7 +20,8 @@ enum { MAQAM_CUSTOM = 0xFF, MAQAM_TRAILER_BYTES = 8, MAQAM_TRAILER_TAG = 0xA1 };
 
 /* tuning.c: pure maths. */
 unsigned maqam_scale_count(void);
-const char *maqam_scale_code(unsigned scale);
+int maqam_fdiv(int a, int b);                     /* floor division */
+unsigned maqam_mod(int a, int b);                 /* a - b * maqam_fdiv(a, b): 0..b-1 for b > 0 */
 /* key[slot] = pitch class 0..11 carrying that grid slot, -1 for unused slots; 0 ok, <0 no assignment. */
 int maqam_assign(unsigned scale, unsigned root, int8_t key[24]);
 /* 0 ok, -1 bad argument or no assignment (main zeroed), -2 an entry left -127..127 (clamped). */
@@ -54,9 +55,9 @@ unsigned maqam_track_root(unsigned track);       /* 0..23 (0 for CUSTOM) */
 /* Re-derive each track's label from the engine tables (after V13 undo or any outside table edit). */
 void maqam_refresh(void);
 
-/* Key layout. The project default is saved in the trailer (flags bits 1-2); a track may override it
-   (RAM only). 0 SNAP is the default so a stock or absent trailer gives SNAP. */
-enum { MAQAM_SNAP, MAQAM_CHROM, MAQAM_WHITE };
+/* Key layout, in the order the KEYS page cycles them. The project default is saved in the trailer (flags
+   bits 1-2); a track may override it (RAM only). 0 SNAP is the default so a stock or absent trailer gives SNAP. */
+enum { MAQAM_SNAP, MAQAM_WHITE, MAQAM_CHROM };
 unsigned maqam_default_layout(void);
 int maqam_set_default_layout(unsigned layout);   /* 0 ok, <0 bad argument */
 
@@ -90,6 +91,9 @@ void maqam_project_loaded(const uint8_t *t);
    quarter tone) with its octave ("Ed4", "Cd5" for B4; the d is MAQAM_HF +50 c; 12-tone names exactly as the stock screen when
    cents is 0). maqam_note_name reads the track's main table, or its alt table when alt is set (alt names get
    a trailing '.', the alt mark); drum tracks give the stock name. out holds at least 12 bytes. */
+/* The one number formatter: v as decimal text in out (12 bytes), '-' for a negative, '+' first when plus and
+   v >= 0. Returns the length. The cents row under the key strip uses (c, c > 0). */
+unsigned maqam_num(char out[12], int v, unsigned plus);
 const char *maqam_slot_name(unsigned slot);       /* the 24 base names, slot 0 = C */
 void maqam_name24(unsigned note, int cents, char out[12]);
 void maqam_note_name(unsigned track, unsigned note, unsigned alt, char out[12]);
@@ -103,33 +107,29 @@ unsigned maqam_degree_name(unsigned scale, unsigned root, unsigned q, char out[4
    encoders/keys in and draw this view; every value is read back from the maqam_* state. */
 enum { MAQAM_SUBPAGES = 4 };
 struct maqam_view {
-    char title[16];                  /* "1/4 PROJECT" */
+    const char *title;               /* "1/4 PROJECT" (static) */
 #define MAQAM_SUB_BIG 19                /* longest subtitle drawn in the large font */
-    char sub[32];                    /* "Ed arab sikah trad" (arrow after the scale when its forms differ) */
-    char status[40];                 /* "TRACK 3 FOLLOWS PROJECT" / OVERRIDE / CUSTOM TABLE */
-    char note[28];                   /* "home: D" hint ("" for WEST scales) */
-    char body[3][36];
-    char knob[4][2][12];             /* label, value */
-    char hint[40];
+    char sub[32];                    /* "Ed ARAB Sikah trad" (arrow after the scale when its forms differ) */
+    char status[28];                 /* "TRACK 3  FOLLOWS PROJECT" / OVERRIDE / CUSTOM TABLE / DRUMS - NOT TUNED */
+    char note[16];                   /* "home: D" hint ("" for WEST scales); "plays: SNAP" on the KEYS page */
+    char line[2][24];                /* ALT page only: "ALT -100 Eb4" (large), "MAIN -47 Ed4" */
+    const char *knob[4][2];          /* label, value: static strings, or rname / atext below; NULL label = no knob */
+    char rname[4], atext[12];        /* the tonic's name; the alt cents with a sign ("+0") */
     char warn[36];                   /* "REDUCE SAMPLE BANK" when the last save could not store tuning */
     int8_t cents[12];                /* the cents under each cell: main table, or alt on the ALT page */
     char lab[12][4];                 /* cell names: spelled where a key carries a degree, else the fixed name */
     uint16_t lit, root, sel;         /* cell masks: scale keys, root key, selected alt key */
     uint8_t ncell;                   /* >0: the degree row, ncell cells in pitch order (names carry ^ / v marks);
                                         0: the 12-key strip, cell i = pitch class i */
-    uint8_t sub_page, big, custom, tuned;
+    uint8_t custom, tuned;
 };
-/* The cents row under the key strip: "-127".."+127", "0". Even keys sit on the upper line and odd keys on the
-   lower one, so a four-character value (24 px) never meets its neighbour (19 px apart). Returns the length. */
-unsigned maqam_cents_text(int cents, char out[6]);
-void maqam_cents_pos(unsigned key, unsigned len, int *x, unsigned *y);   /* top-left pixel of the text */
 void maqam_page_open(void);
 /* Encoders as the panel gives them (0 selects the track and is handled by the caller); key_down: panel keys
    that went down; oct: bit 0 OCT- held, bit 1 OCT+ held. */
 void maqam_page_control(unsigned track, const int16_t enc[7], uint32_t key_down, unsigned oct);
 void maqam_page_view(unsigned track, struct maqam_view *v);
 /* A project save finished with result r (0 or a GROOVE_PROJECT_* / flash code): remembers whether tuning could
-   not be stored (GROOVE_PROJECT_TUNING_SPACE) so the scale page can say REDUCE SAMPLE BANK. Cleared by a good
-   save and by maqam_init. */
+   not be stored (GROOVE_PROJECT_TUNING_SPACE) so the scale page can say REDUCE SAMPLE BANK. Called by
+   groove_project_save_slot, so every save path counts. Cleared by a good save and by maqam_init. */
 void maqam_page_save_result(int r);
 #endif

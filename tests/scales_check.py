@@ -169,6 +169,23 @@ def main():
         chk(p.returncode == 1 and who in p.stderr and why in p.stderr,
             f"fixture {sub}: rc={p.returncode} stderr={p.stderr!r}")
         print(f"fixture {sub}: {p.stderr.strip()}")
+    # spec "Add a scale by editing text": a scale appended to india.txt is an INDIA member at the next free index
+    import shutil
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        shutil.copytree(ROOT / "scales", tmp, dirs_exist_ok=True)
+        with open(Path(tmp) / "india.txt", "a", encoding="utf-8") as f:
+            f.write('\nscale ADDED "AddedScl" home D   # test\n  up   1/1 9/8 5/4 4/3 3/2 5/3 15/8\n')
+        p = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_scales.py"), "--print", "--dir", tmp],
+                           capture_output=True, text=True)
+        rows = p.stdout.splitlines()
+        chk(p.returncode == 0 and len(rows) == len(G.FROZEN) + 1 and rows[len(G.FROZEN)].split()[:2] == ["ADDED", "INDIA"],
+            f"appended india.txt scale is INDIA at index {len(G.FROZEN)}: rc={p.returncode} {p.stderr!r}")
+        out = Path(tmp) / "out" / "scales.h"
+        p = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_scales.py"), str(out), "--dir", tmp],
+                           capture_output=True, text=True)
+        chk(p.returncode == 0 and f'{{"AddedScl", SET_INDIA,' in out.with_suffix(".c").read_text(),
+            "generated row of the appended scale carries SET_INDIA")
     print("scales_check:", "FAIL" if bad else "ok", f"({bad} problems)" if bad else "")
     return 1 if bad else 0
 

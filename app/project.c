@@ -537,7 +537,7 @@ int groove_project_info(unsigned slot, char name[13])
     name[12] = 0;
     return r;
 }
-int groove_project_save_slot(unsigned slot)
+static int save_slot(unsigned slot)
 {
     if (slot >= GROOVE_PROJECT_SLOTS)
         return GROOVE_PROJECT_INVALID;
@@ -579,6 +579,12 @@ int groove_project_save_slot(unsigned slot)
         }
         groove_project_clean();
     }
+    return r;
+}
+int groove_project_save_slot(unsigned slot)
+{
+    int r = save_slot(slot);
+    maqam_page_save_result(r); /* maqam: every save path (panel, SysEx) updates the REDUCE SAMPLE BANK warning */
     return r;
 }
 int groove_project_load_slot(unsigned slot)
