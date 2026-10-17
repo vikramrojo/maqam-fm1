@@ -58,6 +58,22 @@ jobs:
         shell: cmd
         run: build.bat --package
 
+      - name: Size report (largest symbols in the linked firmware)
+        if: always()
+        shell: pwsh
+        run: |
+          $elf = 'build/dx7/sdk.elf'
+          if (!(Test-Path $elf)) { Write-Host 'no sdk.elf'; exit 0 }
+          $nm = Join-Path $env:FM1_PI32_TOOLCHAIN 'bin/llvm-nm.exe'
+          $rows = & $nm --print-size --size-sort --radix=d $elf 2>$null |
+            ForEach-Object { $f = -split $_; if ($f.Count -ge 4) { [pscustomobject]@{size=[int]$f[1]; type=$f[2]; name=$f[3]} } }
+          Write-Host '== largest 60 symbols'
+          $rows | Sort-Object size -Descending | Select-Object -First 60 | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+          Write-Host '== maqam / screen / project symbols, by size'
+          $app = $rows | Where-Object { $_.name -match 'maqam|scale|screen|project|names|pages|keys|SCALES|draw|text' }
+          $app | Sort-Object size -Descending | Select-Object -First 80 | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+          Write-Host ('maqam_* total: ' + (($rows | Where-Object { $_.name -match '^maqam_|SCALES|SCALE_CODES|SET_NAMES' } | Measure-Object size -Sum).Sum))
+
       - name: Summary
         if: always()
         shell: pwsh
