@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */
-/* Edge-case screenshots of the scale pages (HOME+SCL), rendered by the real app/screen.c into
+/* Edge-case screenshots of the scale pages (SCL), rendered by the real app/screen.c into
  * build/host/shots/ as PNGs. Not a test (no _test suffix, so build.sh skips it). Run from the repository root. */
 #define main pages_test_main
 #include "pages_test.c"
@@ -104,5 +104,18 @@ int main(void)
     btn(SAVE); btn(SAVE); ms(300);                   /* refused: non-zero tuning + over-size bank */
     btn(HOME); open_scale(); ms(400);
     snap("19_reduce_sample_bank");
+    /* the scale tag in the header of the overview page */
+    sim_boot(1);
+    maqam_init();
+    ms(50);
+    maqam_set_project(find("RAST"), 7);
+    ms(400);
+    snap("20_overview_tag_rast");
+    /* the stock DX7 scaling screens, the frame the scale pages follow (HOME+SCL, then SCL) */
+    sim_boot(1); maqam_init(); ms(50);
+    hold_home_scl(); ms(400);
+    snap("21_dx7_scaling_stock");
+    btn(SCL); ms(400);
+    snap("22_dx7_curves_stock");
     return failures != 0;
 }

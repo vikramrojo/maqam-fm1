@@ -107,7 +107,8 @@ unsigned maqam_degree_name(unsigned scale, unsigned root, unsigned q, char out[4
    encoders/keys in and draw this view; every value is read back from the maqam_* state. */
 enum { MAQAM_SUBPAGES = 4 };
 struct maqam_view {
-    const char *title;               /* "1/4 PROJECT" (static) */
+    const char *title;               /* the page word: PROJECT, TRACK, KEYS, ALT (static) */
+    uint8_t index;                   /* its position 1..MAQAM_SUBPAGES (drawn n/4) */
 #define MAQAM_SUB_BIG 19                /* longest subtitle drawn in the large font */
     char sub[32];                    /* "Ed ARAB Sikah trad" (arrow after the scale when its forms differ) */
     char status[28];                 /* "TRACK 3  FOLLOWS PROJECT" / OVERRIDE / CUSTOM TABLE / DRUMS - NOT TUNED */
@@ -123,10 +124,12 @@ struct maqam_view {
                                         0: the 12-key strip, cell i = pitch class i */
     uint8_t custom, tuned;
 };
-void maqam_page_open(void);
+void maqam_page_next(void);                      /* SCL on the page: the next subpage, wrapping; the page is reopened on the last one */
+/* The overview / step header tag ("Ed RAST"); 0 for drums and WEST chromatic, "CUST" for a custom table. 12 bytes. */
+unsigned maqam_header_tag(unsigned track, char out[12]);
 /* Encoders as the panel gives them (0 selects the track and is handled by the caller); key_down: panel keys
-   that went down; oct: bit 0 OCT- held, bit 1 OCT+ held. */
-void maqam_page_control(unsigned track, const int16_t enc[7], uint32_t key_down, unsigned oct);
+   that went down (ALT: the first selects that key; the keys play as on any page). */
+void maqam_page_control(unsigned track, const int16_t enc[7], uint32_t key_down);
 void maqam_page_view(unsigned track, struct maqam_view *v);
 /* A project save finished with result r (0 or a GROOVE_PROJECT_* / flash code): remembers whether tuning could
    not be stored (GROOVE_PROJECT_TUNING_SPACE) so the scale page can say REDUCE SAMPLE BANK. Called by

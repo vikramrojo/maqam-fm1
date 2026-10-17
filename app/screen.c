@@ -265,7 +265,7 @@ static char edit_character(char old, int delta)
 }
 struct draw_cache {
     unsigned shown_page;
-    uint32_t header_cache, title_cache, middle_cache, hint_cache, hold_cache, seq_cache;
+    uint32_t header_cache, tag_cache, title_cache, middle_cache, hint_cache, hold_cache, seq_cache;
     uint32_t foot_cache[4], row_cache[8], middle_shape, cell_cache[8][16], tile_cache[16];
     unsigned meter_cache[8];
 };
@@ -298,7 +298,7 @@ static void move_step(const struct groove_view *view, int delta, int pages)
 static unsigned navigation_mode(void)
 {
     return page == BLE || page == PROJECT || page == PRESET_BROWSER || page == MIX || page == NAME ||
-        (page >= SOURCE && page <= RHYTHM) || (page == STEPS && !writing) || page == SCALE_PAGE /* maqam: */ || glo_down;
+        (page >= SOURCE && page <= RHYTHM) || (page == STEPS && !writing) || glo_down;
 }
 static unsigned encoder_active(const int16_t values[7])
 {
@@ -477,7 +477,10 @@ static __attribute__((noinline)) void header(const struct groove_view *v)
         ((uint32_t)v->playing << 16) | (writing << 17) |
         ((uint32_t)v->clock_mode << 18) | ((uint32_t)v->clock_state << 19) | (step_follow << 22) | (groove_arp_enabled(track) << 23) |
         ((uint32_t)(v->sequence_length >> 4) << 24) | (groove_project_dirty() << 27) | (paused << 28) | (count << 29);
-    if (sig == cache->header_cache)
+    char tag[12] = {0};
+    if ((cache->shown_page == OVERVIEW || cache->shown_page == STEPS)) maqam_header_tag(track, tag); /* maqam: scale tag */
+    uint32_t tag_sig = signature(0, tag, sizeof tag);
+    if (sig == cache->header_cache && tag_sig == cache->tag_cache)
         return;
     uint32_t previous = cache->header_cache, changed = sig ^ previous;
     unsigned first = previous == ~0U;
@@ -485,6 +488,11 @@ static __attribute__((noinline)) void header(const struct groove_view *v)
     if (first) {
         paint_fill(0, 0, 240, 30, BACK);
         text(122, 7, "/", 1, DIM, BACK);
+    }
+    if (tag_sig != cache->tag_cache) { /* maqam: the scale tag, under the mode box and above the hold bar (rows 27-28) */
+        cache->tag_cache = tag_sig;
+        paint_fill(190, 20, 42, 7, BACK);
+        text(190, 20, tag, 1, DIM, BACK);
     }
     if (first || (changed & (1U << 27)))
         text(165, 19, groove_project_dirty() ? "*" : " ", 1, AMBER, BACK);
@@ -519,9 +527,9 @@ static __attribute__((noinline)) void header(const struct groove_view *v)
         text(142, 7, step_follow ? "FOLLOW" : "EDIT  ", 1, step_follow ? GREEN : AMBER, BACK);
     if (first || (changed & ((1U << 16) | (1U << 17) | (1U << 23) | (7U << 29)))) {
         uint16_t color = writing ? AMBER : PANEL;
-        paint_fill(181, 7, 51, 16, color);
+        paint_fill(181, 7, 51, 13, color);
         char counting[] = "CNT 4"; counting[4] = (char)('0' + count);
-        text(192, 12, writing ? count ? counting : v->playing ? "REC" : "STEP"
+        text(192, 10, writing ? count ? counting : v->playing ? "REC" : "STEP"
              : groove_arp_enabled(track) ? "ARP" : "LIVE", 1, writing ? BACK : TEXT, color);
     }
 }
@@ -1248,7 +1256,7 @@ static void leds(const struct groove_view *v, unsigned visible)
         for (unsigned key = 0; key < 27; ++key)
             if (key_note[key] != 0xff)
                 bits |= 1U << key;
-        if (!navigation_mode() || visible == SCALE_PAGE) bits |= maqam_key_lights(track); /* maqam: degree lights */
+        if (!navigation_mode()) bits |= maqam_key_lights(track); /* maqam: degree lights */
     }
     if (visible == FM_EDIT) {
         for (unsigned i = 0; i < 10; ++i) bits &= ~(1U << edit_keys[i]);
@@ -1401,14 +1409,24 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
 {
     uint32_t sig = signature(7U, m, sizeof *m);
     sig = signature(sig, &track, sizeof track);
+    uint32_t row = (track << 4) | m->index;     /* the section row, as fm_draw's: T1 DX7  PROJECT  1/4 */
+    if (cache->title_cache != row) {
+        static const char *const source[GROOVE_SOURCES] = {"DX7", "303", "808", "PSG", "PLUK", "SMPL"};
+        cache->title_cache = row;
+        paint_fill(0, 32, 240, 13, BACK);
+        text(8, 35, "T", 1, colors[track], BACK);
+        number(14, 35, track + 1, 1, 1, colors[track], BACK);
+        text(30, 35, source[groove_source_type(track)], 1, TEXT, BACK);
+        text(64, 35, m->title, 1, colors[track], BACK);
+        number(206, 35, m->index, 1, 1, TEXT, BACK);
+        text(212, 35, "/4", 1, DIM, BACK);
+    }
     if (cache->middle_cache != sig) {
         cache->middle_cache = sig;
-        paint_fill(0, 30, 240, 164, BACK);
-        paint_fill(132, 12, 108, 7, BACK);
-        text(132, 12, m->title, 1, DIM, BACK);
-        text(8, 34, m->sub, strlen(m->sub) <= MAQAM_SUB_BIG ? 2 : 1, m->custom ? AMBER : TEXT, BACK);
-        text(8, 54, m->status, 1, colors[track], BACK);
-        text(8, 66, m->note, 1, DIM, BACK);
+        paint_fill(0, 46, 240, 148, BACK);
+        text(8, 46, m->sub, strlen(m->sub) <= MAQAM_SUB_BIG ? 2 : 1, m->custom ? AMBER : TEXT, BACK);
+        text(8, 66, m->status, 1, colors[track], BACK);
+        text(8, 78, m->note, 1, DIM, BACK);
         unsigned cells = m->ncell ? m->ncell : 12, w = cells > 9 ? 19 : 228 / cells; /* degree row: 5-9 cells fit 240 px */
         unsigned cents = 0;                      /* an all-zero row (WEST) shows no cents */
         for (unsigned i = 0; i < cells; ++i) cents |= m->cents[i] != 0;
@@ -1417,19 +1435,19 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
         for (unsigned i = 0; i < cells; ++i) {
             unsigned x = 6 + i * w, lit = (m->lit >> i) & 1U, root = (m->root >> i) & 1U, len = (unsigned)strlen(m->lab[i]);
             uint16_t bg = lit ? colors[track] : PANEL;
-            paint_fill(x, 80, w - 1, 22, bg);
-            if (root) frame(x, 80, w - 1, 22, GREEN);
-            if ((m->sel >> i) & 1U) frame(x - 1, 79, w + 1, 24, ACCENT);
-            text(x + (w - 1 - 6 * len) / 2, 87, m->lab[i], 1, lit ? BACK : DIM, bg);
+            paint_fill(x, 92, w - 1, 22, bg);
+            if (root) frame(x, 92, w - 1, 22, GREEN);
+            if ((m->sel >> i) & 1U) frame(x - 1, 91, w + 1, 24, ACCENT);
+            text(x + (w - 1 - 6 * len) / 2, 99, m->lab[i], 1, lit ? BACK : DIM, bg);
             if (cents) {
                 int c = m->cents[i];
                 char out[12];
                 unsigned n = maqam_num(out, c, c > 0);
-                text((unsigned)((int)x + ((int)w - 6 * (int)n) / 2), 105 + (cells > 9 ? 9 * (i & 1U) : 0), out, 1, c ? TEXT : DIM, BACK); /* 12 cells: staggered, -127 is wider than its key */
+                text((unsigned)((int)x + ((int)w - 6 * (int)n) / 2), 117 + (cells > 9 ? 9 * (i & 1U) : 0), out, 1, c ? TEXT : DIM, BACK); /* 12 cells: staggered, -127 is wider than its key */
             }
         }
         for (unsigned i = 0; i < 2; ++i)          /* ALT page: the alt and main readouts */
-            text(8, drop + (i ? 152U : 122U), m->line[i], 2 - i, i ? DIM : TEXT, BACK);
+            text(8, drop + (i ? 164U : 134U), m->line[i], 2 - i, i ? DIM : TEXT, BACK);
         if (m->warn[0]) text(8, 182, m->warn, 1, AMBER, BACK);
     }
     for (unsigned i = 0; i < 4; ++i)
@@ -1444,7 +1462,7 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
         else if (cache->foot_cache[i] != 1U) { cache->foot_cache[i] = 1U; paint_fill(6 + 59 * i, 195, 54, 32, BACK); }
     if (cache->hint_cache != 1U) {
         cache->hint_cache = 1U;
-        text(6, 231, "ALGO PAGE  SELECT TRACK  HOME BACK", 1, DIM, BACK);
+        text(6, 231, "SCL PAGE  SELECT TRACK  HOME BACK", 1, DIM, BACK);
     }
 }
 static void draw_page_body(const struct fm1_ble_status *ble)
@@ -1454,14 +1472,14 @@ static void draw_page_body(const struct fm1_ble_status *ble)
         cache->shown_page = visible;
         paint_fill(0, 0, 240, 240, BACK);
         if (visible != STARTUP) paint_fill(0, 29, 240, 1, PANEL);
-        cache->header_cache = cache->title_cache = cache->middle_cache = cache->hint_cache = cache->hold_cache = cache->seq_cache = ~0U;
+        cache->header_cache = cache->tag_cache = cache->title_cache = cache->middle_cache = cache->hint_cache = cache->hold_cache = cache->seq_cache = ~0U;
         memset(cache->foot_cache, 0xff, sizeof cache->foot_cache);
         memset(cache->row_cache, 0xff, sizeof cache->row_cache);
         memset(cache->cell_cache, 0xff, sizeof cache->cell_cache);
         memset(cache->tile_cache, 0xff, sizeof cache->tile_cache);
         memset(cache->meter_cache, 0xff, sizeof cache->meter_cache);
-        if (visible == PROJECT || visible == PRESET_BROWSER || visible == SCALE_PAGE)
-            text(8, 8, visible == PROJECT ? "SAVE PROJECT" : visible == SCALE_PAGE ? "SCALE" : "PRESETS", 2, ACCENT, BACK);
+        if (visible == PROJECT || visible == PRESET_BROWSER)
+            text(8, 8, visible == PROJECT ? "SAVE PROJECT" : "PRESETS", 2, ACCENT, BACK);
     }
     if (visible == STARTUP) { boot_draw(); return; }
     const struct groove_view *views = frame_views, *v = &views[track];
@@ -1474,10 +1492,6 @@ static void draw_page_body(const struct fm1_ble_status *ble)
         project_draw();
         return;
     }
-    if (visible == SCALE_PAGE) { /* maqam: */
-        scale_draw(&frame_scale);
-        return;
-    }
     if (visible == BLE) {
         fm1_bluetooth_get_status(&frame_radio);
         frame_radio_flags = groove_settings_radio_flags();
@@ -1486,6 +1500,10 @@ static void draw_page_body(const struct fm1_ble_status *ble)
         return;
     }
     header(v);
+    if (visible == SCALE_PAGE) { /* maqam: the stock header stays, the section row and body are ours */
+        scale_draw(&frame_scale);
+        return;
+    }
     if (visible >= SOURCE) {
         edit_page_draw(visible);
         return;
@@ -1936,6 +1954,25 @@ void groove_screen_tap(uint32_t now)
     notice = bpm < 0 ? "TAP: EXTERNAL MIDI CLOCK" : bpm ? "TAP TEMPO APPLIED" : "TAP AGAIN / HOME+SEQ";
     notice_until = now + 1500U;
 }
+/* The stock SCL screen: DX7 level / rate scaling (FM_EDIT groups 4, 5), or the pitch page SCL opens on other sources. */
+static unsigned stock_scl_page(void)
+{
+    return (page == FM_EDIT && (fm_group == 4 || fm_group == 5)) ||
+        (page == TONE_EDIT && advanced_edit && groove_source_type(track) != GROOVE_DX7 &&
+         tone_pages[track][tone_slot()] == (groove_source_type(track) == GROOVE_303 ? 1U : 0U));
+}
+static void stock_scl_open(void)
+{
+    if (groove_source_type(track) == GROOVE_DX7) {
+        op = operator_selected[track] < 6 ? operator_selected[track] : 0;
+        operator_selected[track] = (uint8_t)op;
+        operator_page[track][op] = (uint8_t)(page == FM_EDIT && fm_group == 4 ? 5 : 4);
+        fm_group = operator_page[track][op]; page = FM_EDIT;
+    } else {
+        advanced_edit = 1; page = TONE_EDIT;
+        tone_pages[track][tone_slot()] = groove_source_type(track) == GROOVE_303 ? 1 : 0;
+    }
+}
 static int apply_controls(const struct fm1_controls *controls, uint32_t now,
                           const struct fm1_ble_status *ble)
 {
@@ -2028,11 +2065,15 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
         page = BLE; glo_down = glo_used = ble_view = ble_forget = ble_action = 0; ble_result = 0;
         goto controls_done;
     }
-    /* maqam: HOME+SCL opens the scale pages (scale pages are not reachable any other way; nothing stock moved). */
+    /* maqam: HOME+SCL toggles the scale pages and the stock SCL screen (SCL alone opens the scale pages).
+       HOME pressed first has already left its page by the time SCL arrives: toggle from the page HOME left. */
+    static unsigned home_page;
+    if (pressed & BUTTON(HOME)) home_page = page;
     if ((controls->buttons & (BUTTON(HOME) | BUTTON(SCL))) == (BUTTON(HOME) | BUTTON(SCL)) &&
         (pressed & (BUTTON(HOME) | BUTTON(SCL)))) {
-        if (page != SCALE_PAGE) maqam_page_open();
-        page = SCALE_PAGE; glo_down = glo_used = 0;
+        if (!(pressed & BUTTON(HOME))) page = home_page;
+        if (stock_scl_page()) page = SCALE_PAGE; else stock_scl_open();
+        glo_down = glo_used = 0;
         goto controls_done;
     }
     /* Keep the original HOME+PRESETS shortcut, including after HOME opens
@@ -2088,16 +2129,10 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
         } else if (pressed & BUTTON(FX)) {
             if (page != EFFECTS) effects_page = 0;
             open_subpage(EFFECTS);
-        } else if (pressed & BUTTON(SCL)) {
-            if (groove_source_type(track) == GROOVE_DX7) {
-                op = operator_selected[track] < 6 ? operator_selected[track] : 0;
-                operator_selected[track] = (uint8_t)op;
-                operator_page[track][op] = (uint8_t)(page == FM_EDIT && fm_group == 4 ? 5 : 4);
-                fm_group = operator_page[track][op]; page = FM_EDIT;
-            } else {
-                advanced_edit = 1; page = TONE_EDIT;
-                tone_pages[track][tone_slot()] = groove_source_type(track) == GROOVE_303 ? 1 : 0;
-            }
+        } else if (pressed & BUTTON(SCL)) { /* maqam: SCL alone is the scale pages; on the stock SCL screen it stays stock */
+            if (page == SCALE_PAGE) maqam_page_next();
+            else if (stock_scl_page()) stock_scl_open();
+            else page = SCALE_PAGE;
         } else if (pressed & BUTTON(EDIT)) {
             unsigned edit = groove_source_type(track) == GROOVE_DX7 ? FM_QUICK : TONE_EDIT;
             edit_down = 1; edit_long = 0; edit_ms = now;
@@ -2135,11 +2170,11 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
         goto controls_done;
     }
     /* maqam: on melodic tracks OCT held = alt hold, double tap = octave; otherwise stock. */
-    if (!maqam_oct_buttons(track, page != STEPS && page != ACTIONS && page != SCALE_PAGE,
+    if (!maqam_oct_buttons(track, page != STEPS && page != ACTIONS,
                            !!(controls->buttons & BUTTON(OCT_DOWN)) | (!!(controls->buttons & BUTTON(OCT_UP)) << 1),
                            !!(pressed & BUTTON(OCT_DOWN)) | (!!(pressed & BUTTON(OCT_UP)) << 1),
                            key_down != 0, now, &octave) &&
-        page != STEPS && page != ACTIONS && page != SCALE_PAGE)
+        page != STEPS && page != ACTIONS)
         octave = clamp(octave + !!(pressed & BUTTON(OCT_UP)) - !!(pressed & BUTTON(OCT_DOWN)), -2, 2);
     if ((pressed & BUTTON(SAVE)) && page != PROJECT && page != BLE &&
         page != SOURCE && page != ACTIONS) {
@@ -2308,8 +2343,7 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
         }
     } else if (page == SCALE_PAGE) { /* maqam: */
         select_track(controls->encoders[0]);
-        maqam_page_control(track, controls->encoders, key_down & ~blocked_keys,
-                           !!(controls->buttons & BUTTON(OCT_DOWN)) | (!!(controls->buttons & BUTTON(OCT_UP)) << 1));
+        maqam_page_control(track, controls->encoders, key_down & ~blocked_keys);
     } else if (page == NAME) {
         name_cursor = (unsigned)clamp((int)name_cursor + controls->encoders[0], 0, 9);
         if (controls->encoders[2]) {

@@ -90,14 +90,13 @@ static unsigned cell_hash(unsigned cell)
     unsigned h = 2166136261U, ink = 0;
     const uint16_t *p = sim_pixels();
     for (unsigned r = 0; r < 14; ++r)
-        for (unsigned c = 0; c < 12; ++c) { uint16_t v = p[(34 + r) * 240 + 8 + cell * 12 + c]; ink += v != 0; h = (h ^ v) * 16777619U; }
+        for (unsigned c = 0; c < 12; ++c) { uint16_t v = p[(46 + r) * 240 + 8 + cell * 12 + c]; ink += v != 0; h = (h ^ v) * 16777619U; }
     return ink ? h : 0;
 }
 static void glyph(void)
 {
     boot("RAST");
-    sim_control(0, 8, 1); ms(30); sim_control(0, 3, 1); ms(30);        /* HOME + SCL: the scale pages */
-    sim_control(0, 3, 0); sim_control(0, 8, 0); ms(100);
+    sim_control(0, 3, 1); ms(30); sim_control(0, 3, 0); ms(100);        /* SCL: the scale pages */
     maqam_set_project(find("RAST"), 4); ms(300);                      /* D root */
     unsigned big_d = cell_hash(0), after_d = cell_hash(1);
     maqam_set_project(find("RAST"), 3); ms(300);                      /* D-half-flat root */

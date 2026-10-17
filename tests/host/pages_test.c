@@ -32,12 +32,12 @@ static unsigned page(void) { return sim_state()[1]; }
 static void btn(unsigned b) { sim_control(0, b, 1); ms(30); sim_control(0, b, 0); ms(30); }
 static void key(unsigned k) { sim_control(1, k, 1); ms(30); sim_control(1, k, 0); ms(30); }
 static void enc(unsigned i, int v) { sim_control(2, i, v); ms(30); }
-/* HOME held, then SCL: the gesture that opens the scale pages. */
+static unsigned sub_of(void) { struct maqam_view v; maqam_page_view(0, &v); return (unsigned)v.index - 1; }
+/* SCL opens the page on the last subpage; the tests then step to the PROJECT subpage (1/4). */
 static void open_scale(void)
 {
-    sim_control(0, HOME, 1); ms(30);
-    sim_control(0, SCL, 1); ms(30);
-    sim_control(0, SCL, 0); sim_control(0, HOME, 0); ms(100);
+    btn(SCL);
+    for (unsigned i = 0; i < 4 && sub_of(); ++i) btn(SCL);
 }
 static void boot(void)
 {
@@ -152,30 +152,134 @@ static unsigned hash_rect(unsigned x, unsigned y, unsigned w, unsigned h)
     return v;
 }
 
+static void hold_home_scl(void)
+{
+    sim_control(0, HOME, 1); ms(30);
+    sim_control(0, SCL, 1); ms(30);
+    sim_control(0, SCL, 0); sim_control(0, HOME, 0); ms(100);
+}
 static void navigation(void)
 {
+    struct maqam_view v;
     sim_boot(1);
     maqam_init();
     ms(50);
     CHECK(page() == PAGE_OVERVIEW);
-    open_scale();
-    CHECK(page() == PAGE_SCALE);
-    btn(HOME);                                   /* HOME leaves, as on every page */
+    btn(SCL);                                    /* SCL opens the scale pages on the last subpage (first: PROJECT) */
+    CHECK(page() == PAGE_SCALE && sub_of() == 0);
+    btn(SCL); CHECK(page() == PAGE_SCALE && sub_of() == 1);        /* and cycles TRACK, KEYS, ALT, PROJECT */
+    btn(SCL); CHECK(sub_of() == 2);
+    btn(SCL); CHECK(sub_of() == 3);
+    btn(SCL); CHECK(sub_of() == 0 && page() == PAGE_SCALE);
+    printf("%-52s ok\n", "SCL opens, then cycles 1/4 2/4 3/4 4/4 1/4");
+    enc(1, -1); CHECK(sub_of() == 3);            /* ALGORITHM wraps both ways */
+    enc(1, 1); CHECK(sub_of() == 0);
+    enc(1, 2);                                   /* leave on KEYS */
+    btn(HOME);                                   /* HOME leaves */
     CHECK(page() == PAGE_OVERVIEW);
-    /* SCL first, then HOME also opens it (the SCL press alone is the stock FM scaling page) */
-    sim_control(0, SCL, 1); ms(30);
-    sim_control(0, HOME, 1); ms(30);
-    sim_control(0, HOME, 0); sim_control(0, SCL, 0); ms(100);
+    btn(SCL);                                    /* ... and SCL returns to the last subpage */
+    CHECK(page() == PAGE_SCALE && sub_of() == 2);
+    maqam_page_view(0, &v);
+    CHECK(!strcmp(v.title, "KEYS"));
+    /* HOME+SCL from a scale page: the stock SCL screen (DX7 level scaling) with the stock SCL toggle */
+    hold_home_scl();
+    CHECK(page() == 2 /* FM_EDIT */ && sim_state()[6] == 4);
+    btn(SCL); CHECK(page() == 2 && sim_state()[6] == 5);           /* rate scaling */
+    btn(SCL); CHECK(page() == 2 && sim_state()[6] == 4);           /* and back */
+    /* HOME+SCL from the stock screen: the scale pages on the last subpage */
+    hold_home_scl();
+    CHECK(page() == PAGE_SCALE && sub_of() == 2);
+    /* the stock toggle still works after the round trip */
+    hold_home_scl(); btn(SCL);
+    CHECK(page() == 2 && sim_state()[6] == 5);
+    printf("%-52s ok\n", "HOME+SCL toggles scale pages / stock scaling (level, rate)");
+    /* HOME+SCL from another page opens the stock screen */
+    btn(HOME); CHECK(page() == PAGE_OVERVIEW);
+    hold_home_scl();
+    CHECK(page() == 2 && sim_state()[6] == 4);
+    btn(HOME); CHECK(page() == PAGE_OVERVIEW);
+    /* HOME leaves either; stock HOME alone is the preset browser */
+    btn(HOME);
+    CHECK(page() != PAGE_SCALE && page() != PAGE_OVERVIEW);
+    printf("navigation: SCL opens/cycles, ALGO wraps, HOME+SCL toggles with the stock screen, HOME leaves\n");
+}
+
+/* A key on a scale page sounds: with REC on, the note is recorded as a step. */
+static void play_check(unsigned key_no, unsigned note, const char *what)
+{
+    struct groove_step c;
+    btn(REC); key(key_no); btn(REC);
+    btn(SEQ); btn(SEQ); ms(50);
+    groove_sequence_read(0, 0, &c, 1);
+    printf("%-52s %s\n", what, c.velocity && c.note == note ? "ok" : "FAIL");
+    if (!(c.velocity && c.note == note)) ++failures;
+    btn(HOME);
+}
+
+/* Cycling the subpages keeps the stock header and the hint row, and changes the section row. */
+static void frame_cycling(void)
+{
+    boot();
+    ms(300);
+    unsigned head = hash_rect(0, 0, 240, 32), hint = hash_rect(0, 229, 240, 11), row = hash_rect(0, 33, 240, 11);
+    CHECK(ink(0, 0, 240, 29) > 200 && ink(8, 35, 230, 7) > 50 && ink(6, 231, 228, 7) > 100);
+    for (unsigned i = 1; i < 4; ++i) {
+        btn(SCL); ms(300);
+        CHECK(sub_of() == i);
+        CHECK(hash_rect(0, 0, 240, 32) == head);            /* header: tempo, transport, mode box */
+        CHECK(hash_rect(0, 229, 240, 11) == hint);
+        CHECK(hash_rect(0, 33, 240, 11) != row);             /* section word and counter changed */
+        row = hash_rect(0, 33, 240, 11);
+    }
+    shot("scale_frame_alt");
+    btn(SCL); ms(300);
+    CHECK(sub_of() == 0 && hash_rect(0, 0, 240, 32) == head);
+    printf("frame: header and hint unchanged across SCL cycling, the section row changes\n");
+}
+
+static void header_tag(void)
+{
+    char t[12];
+    sim_boot(1);
+    maqam_init();
+    ms(50);
+    CHECK(!maqam_header_tag(0, t) && !t[0]);                      /* WEST chromatic: hidden */
+    maqam_set_project(find("RAST"), 7);
+    CHECK(maqam_header_tag(0, t));
+    has("Rast on Ed", t, "E" MAQAM_HF " RAST");
+    CHECK(!strcmp(t, "E" MAQAM_HF " Rast") || !strcmp(t, "E" MAQAM_HF " RAST"));
+    CHECK(!maqam_header_tag(7, t));                                /* drums: hidden */
+    maqam_set_project(find("SIKAH"), 0);
+    CHECK(maqam_header_tag(0, t));
+    has("scale name cut to 4", t, "C SIKA");
+    CHECK(strlen(t) == 6);
+    maqam_set_project(find("RAST"), 7);
+    ms(300);
+    shot("scale_overview_tag");
+    CHECK(ink(190, 20, 42, 7) > 30);                               /* the tag is painted at the right of the header */
+    unsigned rast = hash_rect(190, 20, 42, 7);
+    maqam_set_project(find("BAYAT"), 4);
+    ms(300);
+    CHECK(hash_rect(190, 20, 42, 7) != rast);                      /* redraws when the scale changes */
+    maqam_set_project(find("CHR"), 0);
+    ms(300);
+    CHECK(ink(190, 20, 42, 7) == 0);                               /* chromatic: cleared */
+    maqam_set_project(find("RAST"), 7);
+    btn(SEQ); ms(300);
+    CHECK(page() == 1 && ink(190, 20, 42, 7) > 30);                /* the step page too */
+    shot("scale_steps_tag");
+    /* a CUSTOM table */
+    struct groove_tuning g;
+    tables(0, &g);
+    g.main[1] = 17;
+    CHECK(groove_tuning_set(0, &g) == 0);
+    maqam_refresh();
+    CHECK(maqam_header_tag(0, t));
+    has("CUSTOM", t, "CUST");
+    CHECK(!strcmp(t, "CUST"));
+    btn(SCL); ms(300);                                             /* scale pages carry no tag */
     CHECK(page() == PAGE_SCALE);
-    btn(HOME);
-    /* stock: SCL alone still opens the scaling page, not the scale pages */
-    btn(SCL);
-    CHECK(page() == 2 /* FM_EDIT */);
-    btn(HOME);
-    /* stock: HOME alone opens the preset browser from the overview */
-    btn(HOME);
-    CHECK(page() != PAGE_SCALE);
-    printf("navigation: HOME+SCL (either order) opens the scale page, HOME leaves, SCL alone is stock\n");
+    printf("header tag: Ed RAST, hidden for CHR and drums, SIKA cut, CUST, repaints on change\n");
 }
 
 static void project_page(void)
@@ -184,7 +288,7 @@ static void project_page(void)
     CHECK(page() == PAGE_SCALE);
     struct maqam_view v;
     maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "1/4 PROJECT"));
+    CHECK(!strcmp(v.title, "PROJECT"));
     has("default subtitle", v.sub, "C west chromat trad");
     CHECK(maqam_project_scale() == 0 && maqam_project_root() == 0 && maqam_trad() == 1);
     unsigned sikah = find("SIKAH"), set = SCALES[sikah].set, first = 0;
@@ -226,23 +330,26 @@ static void project_page(void)
     maqam_page_view(0, &v);
     CHECK(v.note[0] == 0 && !strchr(v.sub, '\x18') && !strchr(v.sub, '\x19'));
     printf("%-52s ok\n", "WEST: no home hint, no arrow");
-    /* panel keys: a key is the root; OCT- / OCT+ held make it a quarter tone lower / higher */
-    key(9);                                      /* D4 (key 9) */
-    CHECK(maqam_project_root() == 4);
-    sim_control(0, OCT_DN, 1); ms(30); key(11); sim_control(0, OCT_DN, 0); ms(30);   /* E4 with OCT-: E half-flat */
-    CHECK(maqam_project_root() == 7);
-    sim_control(0, OCT_UP, 1); ms(30); key(11); sim_control(0, OCT_UP, 0); ms(30);   /* E4 with OCT+ */
-    CHECK(maqam_project_root() == 9);
-    CHECK(page() == PAGE_SCALE);
+    /* panel keys play and never set the root, with or without OCT- / OCT+ held */
     {
-        struct groove_step c;
-        groove_sequence_read(0, 0, &c, 1);
-        CHECK(c.velocity == 0);                  /* keys on the page never sound or record notes */
+        unsigned root = maqam_project_root();
+        key(9);
+        CHECK(maqam_project_root() == root);
+        sim_control(0, OCT_DN, 1); ms(30); key(11); sim_control(0, OCT_DN, 0); ms(30);
+        sim_control(0, OCT_UP, 1); ms(30); key(11); sim_control(0, OCT_UP, 0); ms(30);
+        CHECK(maqam_project_root() == root && page() == PAGE_SCALE);
+        play_check(9, 62, "PROJECT page: D key sounds (step records D4)");   /* the page was left by HOME */
+        CHECK(maqam_project_root() == root);
+        btn(SCL);
+        for (unsigned i = 0; i < 4 && sub_of(); ++i) btn(SCL);
     }
     /* root wraps */
-    enc(2, 20);
-    CHECK(maqam_project_root() == 5);
-    printf("project page: K1 root, K2 set, K3 scale, K4 tuning, keys + OCT set the root\n");
+    {
+        unsigned root = maqam_project_root();
+        enc(2, 20);
+        CHECK(maqam_project_root() == (root + 20) % 24);
+    }
+    printf("project page: K1 root, K2 set, K3 scale, K4 tuning, keys play and leave the root alone\n");
 }
 
 static void track_page(void)
@@ -253,7 +360,7 @@ static void track_page(void)
     struct maqam_view v;
     enc(1, 1);                                   /* ALGO: page 2/4 */
     maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "2/4 TRACK"));
+    CHECK(!strcmp(v.title, "TRACK"));
     has("status: follows", v.status, "TRACK 1  FOLLOWS PROJECT");
     CHECK(!maqam_overridden(0));
     enc(2, 1);                                   /* K1 OVERRIDE on: copies the project scale */
@@ -274,8 +381,8 @@ static void track_page(void)
     maqam_page_view(1, &v);
     has("track 2 view", v.status, "TRACK 2  FOLLOWS PROJECT");
     enc(0, -1);
-    key(7);                                      /* C4: track root C (via a key) */
-    CHECK(maqam_track_root(0) == 0 && maqam_overridden(0) && maqam_track_scale(0) == bayat);
+    key(7);                                      /* C4 sounds; the track root stays D */
+    CHECK(maqam_track_root(0) == 4 && maqam_overridden(0) && maqam_track_scale(0) == bayat);
     enc(2, -1);                                  /* K1 OVERRIDE off */
     CHECK(!maqam_overridden(0));
     expect_main(0, rast, 0, 1, "override off: back to the project's Rast on C");
@@ -309,7 +416,7 @@ static void track_page(void)
     tables(7, &after);
     int8_t zero[24] = {0};
     CHECK(!memcmp(&after, zero, sizeof after));
-    printf("track page: K1 override, K2 root, K4 scale, keys set the root, CUSTOM kept, drums untouched\n");
+    printf("track page: K1 override, K2 root, K4 scale, keys leave the root, CUSTOM kept, drums untouched\n");
 }
 
 static void keys_page(void)
@@ -319,7 +426,7 @@ static void keys_page(void)
     struct maqam_view v;
     enc(1, 2);
     maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "3/4 KEYS"));
+    CHECK(!strcmp(v.title, "KEYS"));
     CHECK(maqam_default_layout() == MAQAM_SNAP && maqam_layout_raw(0) < 0);
     enc(2, 1);                                   /* K1 project layout: SNAP -> WHITE */
     CHECK(maqam_default_layout() == MAQAM_WHITE && maqam_layout(0) == MAQAM_WHITE);
@@ -352,7 +459,7 @@ static unsigned cents_text(int c, char *out) { return maqam_num(out, c, c > 0); 
 static void maqam_cents_pos(unsigned key, unsigned len, int *x, unsigned *y)   /* top-left pixel, as screen.c places it */
 {
     *x = 6 + (int)key * 19 + (19 - 6 * (int)len) / 2;
-    *y = 105U + 9U * (key & 1U);
+    *y = 117U + 9U * (key & 1U);
 }
 static void cents_layout(const struct maqam_view *v)
 {
@@ -364,7 +471,7 @@ static void cents_layout(const struct maqam_view *v)
             int xa, xb;
             unsigned ya, yb;
             maqam_cents_pos(a, n, &xa, &ya);
-            CHECK(xa >= 0 && xa + 6 * (int)n <= 240 && ya >= 103 && ya + 7 <= 122);
+            CHECK(xa >= 0 && xa + 6 * (int)n <= 240 && ya >= 115 && ya + 7 <= 134);
             for (unsigned b = a + 1; b < 12; ++b) {
                 maqam_cents_pos(b, n, &xb, &yb);
                 int apart_x = xa + 6 * (int)n + 1 <= xb || xb + 6 * (int)n + 1 <= xa;
@@ -399,11 +506,15 @@ static void alt_page(void)
     struct groove_tuning g, before;
     enc(1, 3);
     maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "4/4 ALT"));
+    CHECK(!strcmp(v.title, "ALT"));
     key(11);                                     /* E4: pitch class 4 */
     maqam_page_view(0, &v);
     CHECK(v.sel == (1U << 4));
     has("key knob", v.knob[0][1], "E");
+    play_check(11, maqam_key_note(0, 11, 0, 0), "ALT page: E key sounds (the step records its note)");
+    btn(SCL);                                    /* back on the last subpage: ALT */
+    maqam_page_view(0, &v);
+    CHECK(!strcmp(v.title, "ALT") && v.sel == (1U << 4));
     tables(0, &before);
     enc(3, -100);                                /* K2: alt E -100 cents */
     tables(0, &g);
@@ -594,14 +705,14 @@ static void pixels(void)
     boot();
     ms(400);
     shot("scale_1_project_default");
-    CHECK(ink(0, 8, 70, 16) > 50);                   /* the SCALE title */
-    unsigned base_sub = hash_rect(8, 34, 224, 16);
-    CHECK(ink(8, 34, 224, 16) > 100);                /* subtitle text is painted */
+    CHECK(ink(8, 35, 230, 7) > 50);                  /* the section row: T1 DX7  PROJECT  1/4 */
+    unsigned base_sub = hash_rect(8, 46, 224, 16);
+    CHECK(ink(8, 46, 224, 16) > 100);                /* subtitle text is painted */
     maqam_set_project(find("SIKAH"), 7);
     ms(300);
-    CHECK(hash_rect(8, 34, 224, 16) != base_sub);    /* and repaints when the scale changes */
-    CHECK(ink(8, 34, 224, 16) > 100);
-    CHECK(ink(8, 66, 224, 8) > 20);                  /* the home hint row */
+    CHECK(hash_rect(8, 46, 224, 16) != base_sub);    /* and repaints when the scale changes */
+    CHECK(ink(8, 46, 224, 16) > 100);
+    CHECK(ink(8, 78, 224, 8) > 20);                  /* the home hint row */
     shot("scale_1_project_sikah");
     maqam_set_project(find("RAST"), 0);
     enc(1, 1);
@@ -617,7 +728,7 @@ static void pixels(void)
     key(11);
     enc(3, -100);
     ms(300);
-    CHECK(ink(8, 122, 224, 16) > 100);               /* the large ALT readout */
+    CHECK(ink(8, 134, 224, 16) > 100);               /* the large ALT readout */
     shot("scale_4_alt");
     /* the step page with a plain and an alt step (the alt mark) */
     sim_boot(1);
@@ -663,7 +774,7 @@ static void degree_row(void)
         CHECK(!memcmp(v.cents, want, 7)); }
     printf("%-52s ok\n", "Bayati row cents vs 24-TET: D 0, Ed +3, F -6, G -2, A +2, Bb +16, C -4");
     has("subtitle (spelled root)", v.sub, "D arab bayati");
-    CHECK(ink(6, 80, 228, 22) > 500);
+    CHECK(ink(6, 92, 228, 22) > 500);
     shot("scale_row_bayati");
     maqam_set_project(find("RAST"), 0);
     ms(300);
@@ -736,6 +847,8 @@ static void degree_row(void)
 int main(void)
 {
     navigation();
+    header_tag();
+    frame_cycling();
     project_page();
     track_page();
     keys_page();
