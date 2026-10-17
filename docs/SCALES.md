@@ -58,13 +58,29 @@ On a melodic track with a scale, the LEDs of the keys that carry a degree light 
 
 ## 3. Names on the screen
 
-Wherever a melodic note is named (the step tiles, the step NOTE knob, the NOTE knob on the overview), the name is the key plus its table offset, rounded to the nearest quarter tone, in the 24 names
+Wherever a melodic note is named (the step tiles, the step NOTE knob, the NOTE knob on the overview, the subtitle root, the alt readout), the pitch is the key plus its table offset, rounded to the nearest quarter tone. Names use one letter and at most one accidental: `b` flat, `d` half-flat, none, `+` half-sharp, `#` sharp, followed by the octave (the octave of the spelled letter: `Cd5` is a quarter tone under C5, so B4 +50 c reads `Cd5`).
+
+**One letter per degree.** A scale whose two forms both have seven degrees is spelled like sheet music: degree *n* takes the letter *n* steps above the tonic's letter, and the accidental that fits its pitch. The tonic's letter is whichever spelling of the root lets every degree use a single accidental, with the fewest accidentals (flat on a tie). The up form is spelled first; a degree shared with the down form keeps that spelling.
+
+| Scale (root) | Degrees read | Test |
+|---|---|---|
+| Rast on C, TRAD: E4 stored | `Ed4` | `names_test` "Rast C: E4 stored" |
+| Bayati on D | D Ed F G A Bb C (A# key = `Bb4`, not `A#4`) | `names_test` "Bayati D degree 1-7" |
+| Saba on D | fourth is `Gb`, not F# | `names_test` "Saba D" |
+| Hijaz on D | up D Eb F# G A Bd C, down seventh `Bb` | `names_test` "Hijaz D up degree 1-7", "descending seventh" |
+| Rast on C | up seventh `Bd`, down seventh `Bb` | `names_test` "Rast C: ascending / descending seventh" |
+| Major on A#/Bb | Bb C D Eb F G A | `names_test` "MAJ on A#/Bb degree 1-7" |
+| Major on C# | Db (flat wins the tie) | `names_test` "MAJ on C#" |
+
+**Fixed names as the fallback.** The fixed 24 names
 
 `C C+ C# Dd D D+ D# Ed E Fd F F+ F# Gd G G+ G# Ad A A+ A# Bd B Cd`
 
-(`d` half-flat, `+` half-sharp) followed by the octave. `Cd` is the quarter tone below the next C: B4 +50 c reads `Cd5`. A zero offset gives exactly the stock 12-tone name, so Western scales look as they always did.
+are used when the pitch is not a degree and its key carries none, and for the whole scale when a form does not have seven degrees (pentatonic, whole-tone, diminished, chromatic) or a degree would need a double accidental. A zero offset on such a scale gives exactly the stock 12-tone name, so Western scales look as they always did: Pentatonic on C plays its D# key as `D#4` (`names_test` "PEN on C"), and every one of the 128 notes under WEST chromatic is the stock name (`names_test` "WEST CHR"). An out-of-scale pitch on a key that carries a degree keeps the degree's letter: on a Rast-on-C track an alt E at -100 reads `Eb4` because the E key carries Ed (`names_test` "Rast C alt E at -100"). Without a degree on the key it is a fixed name: C# on Rast reads `C#4` (`names_test` "Rast C: C# key").
 
-- **Alt steps carry a dot**: a step that holds alt E in a Rast track reads `E4.` while a plain E step reads `Ed4`. The name of an alt step comes from the alt table.
+Spelling is computed from the scale and root every time; nothing is stored. Of the 73 scales on the 24 roots, 1093 of 1752 pairs are spelled and the rest use the fixed names (`names_test` "spelling:" line).
+
+- **Alt steps carry a dot**: a step that holds alt E in a Rast track reads `E4.` while a plain E step reads `Ed4` (`names_test` "Rast TRAD, E4 alt"). The name of an alt step comes from the alt table.
 - Drum tracks show the stock names.
 
 ---
@@ -75,12 +91,13 @@ Open them with **HOME + SCL** (hold HOME, press SCL; in either order). The SCL b
 
 **SELECT** picks the track, **ALGO** moves between the four pages. The top of every page shows the subtitle, for the project (page 1) or the selected track (pages 2-4):
 
-`Ed arab sikah^ trad` = root Ed (E half-flat), set ARAB, scale Sikah, TRAD.
+`Ed arab sikah^ trad` (`pages_test` "subtitle after K1/K2/K3") = root Ed (E half-flat), set ARAB, scale Sikah, TRAD.
 
 - The arrow after the scale name (up or down, as the last key of the track went) shows **only for scales whose two forms differ**. Scales with one form (Major, Bilawal ...) show none.
 - The line under it says whether the track **FOLLOWS PROJECT**, has an **OVERRIDE**, or has a **CUSTOM TABLE**, and for drum tracks **DRUMS - NOT TUNED**.
 - The **home hint** `home: Ed` shows the scale's traditional tonic for non-Western scales. It is a hint only: choosing a scale never moves the root. To play Sikah at home, press E half-flat as the root (OCT- + E).
-- A strip of 12 key cells shows the track's keys: coloured = carries a degree, green frame = root. The numbers under it are the table's cents (main on pages 1-3, alt on page 4).
+- **Pages 1 and 2 show a degree row**: only the scale's degrees (both forms together), in pitch order from the root, each cell with its spelled name and, under it, the table's cents against 12-TET. Green frame = the root. A degree of one form only is marked: `^` ascending only, `v` descending only. Keys that carry no degree do not appear. Bayati on D, TRAD: seven cells `D Ed F G A Bb C` with `0 -47 -6 -2 +2 +16 -4` (`pages_test` "Bayati on D", "Bayati row cents"). Rast on C: `C D Ed F G A Bb Bd`, `Bb` marked down (descending only) and `Bd` marked up (ascending only) (`pages_test` "Rast on C"). Every scale gives one cell per degree (5 to 9; 12 for WEST chromatic) (`pages_test` "degree row: one cell per degree"). A CUSTOM track has no degrees and keeps the 12-key strip.
+- Page 3 (KEYS) and page 4 (ALT) keep the strip of all 12 keys: coloured = carries a degree, green frame = root.
 - If the last project save was refused because a sample bank leaves no room for the tuning tables, the pages show **SAVE FAILED: REDUCE SAMPLE BANK** (section 6).
 
 ### Page 1/4: PROJECT
@@ -124,7 +141,7 @@ A track always uses the project's intonation. Two maqamat at once: set the proje
 | **K3** | the same, +/-10 per click |
 | **K4 RESET** | turn it: the track's alt table goes back to the scale's defaults |
 
-The large line shows the **signed cents** and the 24-tone name of the resulting pitch at octave 4 (alt E at -100: `ALT -100 D#4`, the pitch of E-flat), and the line under it the main entry. Edits are kept until the scale or root of that track next changes, and are saved with the project.
+The strip keeps all 12 keys, because an alt pitch can be set on any key: keys that carry a degree show the degree's spelled name, the others are dimmed with their fixed name. On Bayati on D the A# key reads `Bb` and C#, D#, F#, G# are dimmed (`pages_test` "alt strip: A# key is labelled Bb", C# D# F# G# dimmed). The large line shows the **signed cents** and the name of the resulting pitch at octave 4, spelled as for notes (alt E at -100 on Rast on C: `ALT -100 Eb4`, `pages_test` "name of the resulting pitch (Eb)"), and the line under it the main entry. Edits are kept until the scale or root of that track next changes, and are saved with the project.
 
 ---
 

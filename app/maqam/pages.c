@@ -155,7 +155,8 @@ MAQAM_SMALL static void subtitle(char *out, unsigned n, unsigned s, unsigned r, 
     if (s == MAQAM_CUSTOM) { put(out, n, "custom"); }
     else {
         char w[12];
-        put(out, n, maqam_slot_name(r));
+        maqam_degree_name(s, r, r, w);
+        put(out, n, w);
         cat(out, n, " ");
         put(w, sizeof w, SET_NAMES[SCALES[s].set]); lower(w); cat(out, n, w);
         cat(out, n, " ");
@@ -164,9 +165,13 @@ MAQAM_SMALL static void subtitle(char *out, unsigned n, unsigned s, unsigned r, 
     }
     cat(out, n, maqam_trad() ? " trad" : " equal");
 }
-MAQAM_SMALL static void masks(unsigned s, unsigned r, const struct groove_tuning *g, struct maqam_view *v)
+/* The key strip, or (row) the degree row: the scale's degrees in pitch order, spelled, with the table cents of
+   the key that plays each and a mark for a degree of one form only. A CUSTOM table has no degrees: the strip. */
+MAQAM_SMALL static void strip(unsigned s, unsigned r, const struct groove_tuning *g, struct maqam_view *v, unsigned row)
 {
     int8_t key[24];
+    char nm[4];
+    for (unsigned i = 0; i < 12; ++i) put(v->lab[i], sizeof v->lab[i], maqam_slot_name(2 * i));
     v->lit = 0xfff;
     if (s == MAQAM_CUSTOM) {                              /* no scale: show the keys the table moves */
         v->lit = 0;
@@ -175,8 +180,21 @@ MAQAM_SMALL static void masks(unsigned s, unsigned r, const struct groove_tuning
     }
     if (maqam_assign(s, r, key)) return;
     v->lit = 0;
-    for (unsigned i = 0; i < 24; ++i) if (key[i] >= 0) v->lit |= (uint16_t)(1U << key[i]);
-    if (key[0] >= 0) v->root = (uint16_t)(1U << key[0]);
+    for (unsigned sl = 0, n = 0; sl < 24; ++sl) {
+        if (key[sl] < 0) continue;
+        unsigned up = scale_up(&SCALES[s]) >> sl & 1U, down = scale_down(&SCALES[s]) >> sl & 1U, k = (unsigned)key[sl];
+        if (maqam_degree_name(s, r, r + sl, nm) || row) {
+            if (row) {
+                if (up != down) strcat(nm, up ? "\x18" : "\x19");
+                v->cents[n] = g->main[k];
+                k = n++;
+                v->ncell = (uint8_t)n;
+            }
+            put(v->lab[k], sizeof v->lab[k], nm);
+        }
+        v->lit |= (uint16_t)(1U << k);
+        if (!sl) v->root = (uint16_t)(1U << k);
+    }
 }
 MAQAM_SMALL static void knob(struct maqam_view *v, unsigned i, const char *label, const char *value)
 {
@@ -209,13 +227,14 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
         put(v->note, sizeof v->note, "home: ");
         cat(v->note, sizeof v->note, maqam_slot_name(SCALES[s].home));
     }
-    masks(s, r, &g, v);
     memcpy(v->cents, g.main, 12);
+    strip(s, r, &g, v, sub <= SUB_TRACK && !custom);
     if (no_space) put(v->warn, sizeof v->warn, "SAVE FAILED: REDUCE SAMPLE BANK");
 
     const char *scale_name = custom ? "CUSTOM" : SCALES[s].name, *set_name = custom ? "--" : SET_NAMES[set];
     if (sub == SUB_PROJECT) {
-        knob(v, 0, "ROOT", maqam_slot_name(r));
+        maqam_degree_name(s, r, r, tmp);
+        knob(v, 0, "ROOT", tmp);
         knob(v, 1, "SET", set_name);
         knob(v, 2, "SCALE", scale_name);
         knob(v, 3, "TUNING", maqam_trad() ? "TRAD" : "EQUAL");
@@ -224,7 +243,8 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
         put(v->body[2], sizeof v->body[2], "ROOT, SET AND SCALE ARE ALL PROJECT-WIDE");
     } else if (sub == SUB_TRACK) {
         knob(v, 0, "OVERRIDE", maqam_overridden(t) ? "ON" : "OFF");
-        knob(v, 1, "ROOT", custom ? "--" : maqam_slot_name(r));
+        maqam_degree_name(s, r, r, tmp);
+        knob(v, 1, "ROOT", custom ? "--" : tmp);
         knob(v, 2, "SET", set_name);
         knob(v, 3, "SCALE", scale_name);
         put(v->body[0], sizeof v->body[0], "KEY = TRACK ROOT   K1 LEFT = FOLLOW");
@@ -244,25 +264,24 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
             lower(v->note);
         }
     } else {
-        static const char *const pc_name[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
         char nm[12], line[36];
         int main_c = g.main[sel], alt_c = g.alt[sel];
         memcpy(v->cents, g.alt, 12);
         v->sel = (uint16_t)(1U << sel);
         v->big = 1;
-        knob(v, 0, "KEY", pc_name[sel]);
+        knob(v, 0, "KEY", maqam_slot_name(2 * sel));
         num(tmp, sizeof tmp, alt_c, 1);
         knob(v, 1, "ALT +/-1", tmp);
         knob(v, 2, "ALT +/-10", tmp);
         knob(v, 3, "RESET", "TURN");
-        maqam_name24(60 + sel, alt_c, nm);
+        maqam_name_scale(s, r, 60 + sel, alt_c, nm);
         put(line, sizeof line, "ALT ");
         num(tmp, sizeof tmp, alt_c, 0);
         cat(line, sizeof line, tmp);
         cat(line, sizeof line, " ");
         cat(line, sizeof line, nm);
         put(v->body[0], sizeof v->body[0], line);
-        maqam_name24(60 + sel, main_c, nm);
+        maqam_name_scale(s, r, 60 + sel, main_c, nm);
         put(line, sizeof line, "MAIN ");
         num(tmp, sizeof tmp, main_c, 0);
         cat(line, sizeof line, tmp);

@@ -15,6 +15,8 @@ enum { MAQAM_CUSTOM = 0xFF, MAQAM_TRAILER_BYTES = 8, MAQAM_TRAILER_TAG = 0xA1 };
 
 /* The half-flat letter in 24-tone names: screen.c draws this code as a lowercase d (see names.c). */
 #define MAQAM_HF "\x1a"
+/* The flat letter: screen.c draws this code as a lowercase b (a real b would be drawn as B, a note). */
+#define MAQAM_FLAT "\x1b"
 
 /* tuning.c: pure maths. */
 unsigned maqam_scale_count(void);
@@ -91,6 +93,11 @@ void maqam_project_loaded(const uint8_t *t);
 const char *maqam_slot_name(unsigned slot);       /* the 24 base names, slot 0 = C */
 void maqam_name24(unsigned note, int cents, char out[12]);
 void maqam_note_name(unsigned track, unsigned note, unsigned alt, char out[12]);
+/* Scale-aware spelling (D8): `scale` on `root` (0..23); a CUSTOM or unspellable scale gives maqam_name24.
+   maqam_name_scale: the name with octave. maqam_degree_name: pitch q (quarter tones above C, any) without
+   octave, out holds 4 bytes; returns 1 if spelled, 0 if it is a fixed 24 name. */
+void maqam_name_scale(unsigned scale, unsigned root, unsigned note, int cents, char out[12]);
+unsigned maqam_degree_name(unsigned scale, unsigned root, unsigned q, char out[4]);
 
 /* pages.c: the scale pages (control task only). The screen hooks in screen.c only open the page, pass the
    encoders/keys in and draw this view; every value is read back from the maqam_* state. */
@@ -104,8 +111,11 @@ struct maqam_view {
     char knob[4][2][12];             /* label, value */
     char hint[40];
     char warn[36];                   /* "REDUCE SAMPLE BANK" when the last save could not store tuning */
-    int8_t cents[12];                /* the table row under the key strip (main, or alt on the ALT page) */
-    uint16_t lit, root, sel;         /* pitch-class masks: scale keys, root key, selected alt key */
+    int8_t cents[12];                /* the cents under each cell: main table, or alt on the ALT page */
+    char lab[12][4];                 /* cell names: spelled where a key carries a degree, else the fixed name */
+    uint16_t lit, root, sel;         /* cell masks: scale keys, root key, selected alt key */
+    uint8_t ncell;                   /* >0: the degree row, ncell cells in pitch order (names carry ^ / v marks);
+                                        0: the 12-key strip, cell i = pitch class i */
     uint8_t sub_page, big, custom, tuned;
 };
 /* The cents row under the key strip: "-127".."+127", "0". Even keys sit on the upper line and odd keys on the

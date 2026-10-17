@@ -75,7 +75,8 @@ static const uint8_t punctuation[][6] = {
     {95,0x40,0x40,0x40,0x40,0x40}, {96,0,1,2,4,0}, {123,0,8,0x36,0x41,0},
     {124,0,0,0x7f,0,0}, {125,0,0x41,0x36,8,0}, {126,8,4,8,0x10,8},
     {24,4,2,0x7f,2,4}, {25,0x10,0x20,0x7f,0x20,0x10}, /* maqam: up / down arrows */
-    {26,0x38,0x44,0x44,0x44,0x7f} /* maqam: lowercase d, the half-flat in 24-tone names */
+    {26,0x38,0x44,0x44,0x44,0x7f}, /* maqam: lowercase d, the half-flat in 24-tone names */
+    {27,0x7f,0x44,0x44,0x44,0x38} /* maqam: lowercase b, the flat */
 };
 static void text(unsigned x, unsigned y, const char *s, unsigned scale, uint16_t color,
                  uint16_t background)
@@ -1369,7 +1370,6 @@ static __attribute__((noinline, cold, minsize)) void boot_draw(void)
 /* maqam: the scale pages (app/maqam/pages.c builds the view; this only paints it). */
 static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
 {
-    static const char *const pcs[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
     uint32_t sig = signature(7U, m, sizeof *m);
     sig = signature(sig, &track, sizeof track);
     if (cache->middle_cache != sig) {
@@ -1380,19 +1380,19 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
         text(8, 34, m->sub, strlen(m->sub) <= 19 ? 2 : 1, m->custom ? AMBER : TEXT, BACK);
         text(8, 54, m->status, 1, colors[track], BACK);
         text(8, 66, m->note, 1, DIM, BACK);
-        for (unsigned i = 0; i < 12; ++i) {
-            unsigned x = 6 + i * 19, lit = (m->lit >> i) & 1U, root = (m->root >> i) & 1U;
+        unsigned cells = m->ncell ? m->ncell : 12, w = cells > 9 ? 19 : 228 / cells; /* degree row: 5-9 cells fit 240 px */
+        for (unsigned i = 0; i < cells; ++i) {
+            unsigned x = 6 + i * w, lit = (m->lit >> i) & 1U, root = (m->root >> i) & 1U, len = (unsigned)strlen(m->lab[i]);
             uint16_t bg = lit ? colors[track] : PANEL;
-            paint_fill(x, 80, 18, 22, bg);
-            if (root) frame(x, 80, 18, 22, GREEN);
-            if ((m->sel >> i) & 1U) frame(x - 1, 79, 20, 24, ACCENT);
-            text(x + (strlen(pcs[i]) == 1 ? 6 : 3), 87, pcs[i], 1, lit ? BACK : DIM, bg);
+            paint_fill(x, 80, w - 1, 22, bg);
+            if (root) frame(x, 80, w - 1, 22, GREEN);
+            if ((m->sel >> i) & 1U) frame(x - 1, 79, w + 1, 24, ACCENT);
+            text(x + (w - 1 - 6 * len) / 2, 87, m->lab[i], 1, lit ? BACK : DIM, bg);
             if (m->tuned) {
-                int c = m->cents[i], tx;
-                unsigned ty;
+                int c = m->cents[i];
                 char out[6];
-                maqam_cents_pos(i, maqam_cents_text(c, out), &tx, &ty); /* staggered: -127 is wider than its key */
-                text((unsigned)tx, ty, out, 1, c ? TEXT : DIM, BACK);
+                unsigned n = maqam_cents_text(c, out);
+                text((unsigned)((int)x + ((int)w - 6 * (int)n) / 2), 105 + (cells > 9 ? 9 * (i & 1U) : 0), out, 1, c ? TEXT : DIM, BACK); /* 12 cells: staggered, -127 is wider than its key */
             }
         }
         for (unsigned i = 0; i < 3; ++i)
