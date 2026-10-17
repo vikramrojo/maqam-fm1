@@ -410,7 +410,7 @@ static void alt_page(void)
     CHECK(g.alt[4] == -100);
     CHECK(!memcmp(g.main, before.main, 12));     /* main untouched */
     maqam_page_view(0, &v);
-    has("signed cents readout", v.line[0], "-100");
+    has("readout: 24-TET deviation + spelled name", v.line[0], "ALT 0 E" MAQAM_FLAT "4");   /* -100 on E = Eb, 0 c off the grid */
     has("name of the resulting pitch (Eb)", v.line[0], "E" MAQAM_FLAT "4");
     has("main entry shown too", v.line[1], "MAIN ");
     has("alt knob value is signed", v.knob[1][1], "-100");
@@ -433,13 +433,13 @@ static void alt_page(void)
     enc(3, 5);
     tables(0, &g);
     CHECK(g.alt[7] == before.alt[7] + 5 && g.alt[4] == -100);
-    /* the alt row under the keys is the alt table */
-    CHECK(v.cents[4] == -100);
+    /* the alt row under the keys is the alt table, shown as cents from the nearest quarter tone */
+    CHECK(v.cents[4] == 0);
     key(12); enc(3, 127); enc(3, 127);           /* F: +127 right next to E -100 ... */
     key(13); enc(3, -127);                       /* ... and F#: -127 */
     key(11);                                     /* E selected again */
     maqam_page_view(0, &v);
-    CHECK(v.cents[4] == -100 && v.cents[5] == 127 && v.cents[6] == -127);
+    CHECK(v.cents[4] == 0 && v.cents[5] == -23 && v.cents[6] == 23);   /* -100, +127, -127 vs 24-TET */
     ms(300);
     cents_layout(&v);
     shot("scale_4_alt");     /* E -100, F +127, F# -127 side by side */
@@ -658,10 +658,10 @@ static void degree_row(void)
         expect_row("Bayati on D: seven cells D Ed F G A Bb C", &v, want, 7); }
     CHECK(v.lit == 0x7f && v.root == 1);
     tables(0, &g);
-    CHECK(v.cents[0] == g.main[2] && v.cents[1] == g.main[4] && v.cents[5] == g.main[10] && v.cents[6] == g.main[0]);
-    {   static const int8_t want[7] = {0, -47, -6, -2, 2, 16, -4};     /* TRAD offsets vs 12-TET, in cell order */
+    CHECK(g.main[4] == -47 && g.main[10] == 16);  /* the engine table stays relative to 12-TET */
+    {   static const int8_t want[7] = {0, 3, -6, -2, 2, 16, -4};       /* shown vs 24-TET: Ed is -47 from E, +3 from E half-flat */
         CHECK(!memcmp(v.cents, want, 7)); }
-    printf("%-52s ok\n", "Bayati row cents: D 0, Ed -47, F -6, G -2, A +2, Bb +16, C -4");
+    printf("%-52s ok\n", "Bayati row cents vs 24-TET: D 0, Ed +3, F -6, G -2, A +2, Bb +16, C -4");
     has("subtitle (spelled root)", v.sub, "D arab bayati");
     CHECK(ink(6, 80, 228, 22) > 500);
     shot("scale_row_bayati");

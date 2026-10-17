@@ -1433,7 +1433,14 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
         if (m->warn[0]) text(8, 182, m->warn, 1, AMBER, BACK);
     }
     for (unsigned i = 0; i < 4; ++i)
-        if (m->knob[i][0]) knob(i, m->knob[i][0], m->knob[i][1], colors[i]);
+        if (m->knob[i][0]) {                     /* values cut to 4 characters: always the large font */
+            char value[5];
+            unsigned n = (unsigned)strlen(m->knob[i][1]);
+            n = n > 4 ? 4 : n;
+            memcpy(value, m->knob[i][1], n);
+            value[n] = 0;
+            knob(i, m->knob[i][0], value, colors[i]);
+        }
         else if (cache->foot_cache[i] != 1U) { cache->foot_cache[i] = 1U; paint_fill(6 + 59 * i, 195, 54, 32, BACK); }
     if (cache->hint_cache != 1U) {
         cache->hint_cache = 1U;
