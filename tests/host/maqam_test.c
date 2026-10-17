@@ -3,6 +3,7 @@
  * against tools/gen_scales.py for every scale and root), pushing through engine.c, undo, the scale
  * trailer in the project record, stock V13 compatibility, and table -> scale matching.
  * Run from the repository root (the cross-check runs python3 tools/gen_scales.py). */
+#define _POSIX_C_SOURCE 200809L /* popen/pclose under strict C11 libcs */
 #include "internal.h"
 #include "../../app/maqam/maqam.h"
 #include "../../app/maqam/scales.h"
