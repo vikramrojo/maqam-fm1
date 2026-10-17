@@ -52,7 +52,7 @@ MAQAM_SMALL static unsigned key_pc(uint32_t keys)
         if (keys >> k & 1U) return (KEY_BASE + k) % 12U;
     return 12;
 }
-static const char *const layout_name[2] = {"SNAP", "CHROM"};            /* by MAQAM_* value */
+static const char layout_name[2][6] = {"SNAP", "CHROM"};            /* by MAQAM_* value */
 
 /* The track's scale and root for editing: its own, or the project's when its table is CUSTOM. */
 MAQAM_SMALL static void track_base(unsigned t, unsigned *s, unsigned *r)
@@ -133,9 +133,9 @@ MAQAM_SMALL static void subtitle(char *out, unsigned n, unsigned s, const char *
 {
     for (unsigned set = 1;; set = 0) {          /* drop the set name when the line won't fit the large font */
         out[0] = 0;
-        if (s == MAQAM_CUSTOM) { put(out, n, "custom"); }
+        if (s == MAQAM_CUSTOM) cat(out, n, "custom");
         else {
-            put(out, n, tonic);
+            cat(out, n, tonic);
             if (set) { cat(out, n, " "); cat(out, n, SET_NAMES[SCALES[s].set]); }
             cat(out, n, " ");
             cat(out, n, SCALES[s].name);
@@ -178,7 +178,7 @@ MAQAM_SMALL static void strip(unsigned s, unsigned r, const struct groove_tuning
 }
 MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
 {
-    static const char *const title[MAQAM_SUBPAGES] = {"SCALE", "TRACK", "CHORD"};
+    static const char title[MAQAM_SUBPAGES][6] = {"SCALE", "TRACK", "CHORD"};
     static const char label[4][6] = {"MODE", "TYPE", "INV", "VOICE"};
     static const char value[][5] = {"TRI", "7TH", "SUS2", "SUS4", "5TH", "5+8", "JINS", "ROOT", "1ST", "2ND", "3RD", "AUTO",
                                     "CLOS", "OPEN", "BASS", "OFF", "ON"};   /* TYPE, INV, VOICE, MODE */
@@ -195,14 +195,13 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
     v->custom = (uint8_t)custom;
     maqam_degree_name(s, r, r, v->rname);                 /* a CUSTOM scale gives the fixed name */
     subtitle(v->sub, sizeof v->sub, s, v->rname, maqam_last_descending(t));
-    char *p = v->status;
-    memcpy(p, "TRACK ", 6);
-    p += 6 + maqam_num(p + 6, (int)t + 1, 0);
-    put(p, sizeof v->status - (unsigned)(p - v->status), !v->tuned ? "  DRUMS - NOT TUNED"
+    memcpy(v->status, "TRACK ", 6);
+    maqam_num(v->status + 6, (int)t + 1, 0);
+    cat(v->status, sizeof v->status, !v->tuned ? "  DRUMS - NOT TUNED"
         : custom ? "  CUSTOM TABLE"
         : maqam_overridden(t) ? "  OWN SCALE" : "  FOLLOWS PROJECT");
     if (!custom && set != SET_WEST) {                     /* a hint: it never moves the root */
-        put(v->note, sizeof v->note, "home: ");
+        memcpy(v->note, "home: ", 6);
         cat(v->note, sizeof v->note, maqam_slot_name(SCALES[s].home));
     }
     memcpy(v->cents, sub == SUB_TRACK ? g.alt : g.main, 12);

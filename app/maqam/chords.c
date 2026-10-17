@@ -88,15 +88,16 @@ done:
 /* Replaces the stock name in out by the interval name of step `step`'s chord, on a melodic track. */
 MAQAM_SMALL void maqam_step_chord_name(unsigned track, unsigned step, char out[8])
 {
-    struct groove_view w = {0};
+    struct groove_step w;
     struct groove_sequence_options o;
-    uint8_t n[NOTES] = {0};
+    uint8_t n[NOTES];
     if (!maqam_melodic(track)) return;
-    groove_get_view(track, step, &w);
+    groove_sequence_read(track, step, &w, 1);
     groove_sequence_options_copy(&o);
-    unsigned id = w.step.drums & 31U, c = id ? o.chord[id - 1][0] : 1;
-    for (unsigned i = 0; i < c && i < NOTES; ++i) n[i] = (uint8_t)(w.step.note + (i ? o.chord[id - 1][i] : 0));
-    maqam_chord_name(track, w.step.drums >> 13 & 1U, n, c, out);
+    const uint8_t *row = o.chord[((w.drums & 31U) - 1) & 15U];
+    unsigned c = w.drums & 31U ? row[0] : 1;
+    for (unsigned i = 0; i < c; ++i) n[i] = (uint8_t)(w.note + (i ? row[i] : 0));
+    maqam_chord_name(track, w.drums >> 13 & 1U, n, c, out);
 }
 
 /* Trailer bytes [5..6]: chord-mode mask; type | inv << 3 | voice << 6 of the lowest chord-mode track. */

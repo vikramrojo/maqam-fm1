@@ -383,6 +383,18 @@ static __attribute__((noinline)) void number(unsigned x, unsigned y, int value, 
     decimal(out, value, digits);
     text(x, y, out, scale, foreground, background);
 }
+static __attribute__((noinline)) void fillb(unsigned x, unsigned y, unsigned w, unsigned h)
+{
+    paint_fill(x, y, w, h, BACK);
+}
+static __attribute__((noinline)) void textb(unsigned x, unsigned y, const char *s, unsigned scale, uint16_t color)
+{
+    text(x, y, s, scale, color, BACK);
+}
+static __attribute__((noinline)) void numberb(unsigned x, unsigned y, int value, unsigned digits, unsigned scale, uint16_t color)
+{
+    number(x, y, value, digits, scale, color, BACK);
+}
 static void note_name(unsigned note, char out[12])
 {
     static const char names[] = "CCDDEFFGGAAB";
@@ -462,10 +474,10 @@ static void knob(unsigned col, const char *label, const char *value, uint16_t co
         return;
     cache->foot_cache[col] = sig;
     unsigned x = 6 + 59 * col;
-    paint_fill(x, 195, 54, 32, BACK);
+    fillb(x, 195, 54, 32);
     paint_fill(x, 195, 54, 2, color);
-    text(x, 200, label, 1, TEXT, BACK);
-    text(x, 212, value, strlen(value) <= 4 ? 2 : 1, color, BACK);
+    textb(x, 200, label, 1, TEXT);
+    textb(x, 212, value, strlen(value) <= 4 ? 2 : 1, color);
 }
 static __attribute__((noinline)) void header(const struct groove_view *v)
 {
@@ -486,28 +498,28 @@ static __attribute__((noinline)) void header(const struct groove_view *v)
     unsigned first = previous == ~0U;
     cache->header_cache = sig;
     if (first) {
-        paint_fill(0, 0, 240, 30, BACK);
-        text(122, 7, "/", 1, DIM, BACK);
+        fillb(0, 0, 240, 30);
+        textb(122, 7, "/", 1, DIM);
     }
     if (tag_sig != cache->tag_cache) { /* maqam: the scale tag, under the mode box and above the hold bar (rows 27-28) */
         cache->tag_cache = tag_sig;
-        paint_fill(190, 20, 42, 7, BACK);
-        text(190, 20, tag, 1, DIM, BACK);
+        fillb(190, 20, 42, 7);
+        textb(190, 20, tag, 1, DIM);
     }
     if (first || (changed & (1U << 27)))
-        text(165, 19, groove_project_dirty() ? "*" : " ", 1, AMBER, BACK);
+        textb(165, 19, groove_project_dirty() ? "*" : " ", 1, AMBER);
     if (first || (changed & (7U << 24)))
-        number(128, 7, v->sequence_length, 2, 1, DIM, BACK);
+        numberb(128, 7, v->sequence_length, 2, 1, DIM);
     /* Fixed-width glyphs replace their own background; a moving playhead
      * only updates its two digits and, at a page boundary, two indicators. */
     if (first || (changed & 1023U)) {
         if (v->clock_mode && !v->tempo)
-            text(8, 8, "---", 2, DIM, BACK);
+            textb(8, 8, "---", 2, DIM);
         else
-            number(8, 8, v->tempo, 3, 2, TEXT, BACK);
+            numberb(8, 8, v->tempo, 3, 2, TEXT);
     }
     if (first || (changed & (7U << 18))) {
-        paint_fill(45, 15, 32, 7, BACK);
+        fillb(45, 15, 32, 7);
         text(45, 15, !v->clock_mode ? "BPM" : v->clock_state == GROOVE_CLOCK_LOST
             ? "LOST" : v->clock_state == GROOVE_CLOCK_LOCKED ? (groove_midi_setting(track,6) == 1 ? "USB" : groove_midi_setting(track,6) == 2 ? "BLE" : groove_midi_setting(track,6) == 3 ? "DIN" : "EXT") : "WAIT",
             1, v->clock_state == GROOVE_CLOCK_LOST ? AMBER : DIM, BACK);
@@ -516,7 +528,7 @@ static __attribute__((noinline)) void header(const struct groove_view *v)
         text(80, 7, v->playing ? "PLAY " : paused ? "PAUSE" : "STOP ", 1,
              v->playing ? GREEN : paused ? AMBER : DIM, BACK);
     if (first || (changed & (63U << 10)))
-        number(110, 7, v->play_step + 1, 2, 1, TEXT, BACK);
+        numberb(110, 7, v->play_step + 1, 2, 1, TEXT);
     for (unsigned i = 0; i < 4; ++i) {
         unsigned active = v->playing && i == v->play_step / 16;
         unsigned was_active = (previous & (1U << 16)) && i == ((previous >> 14) & 3U);
@@ -524,7 +536,7 @@ static __attribute__((noinline)) void header(const struct groove_view *v)
             paint_fill(80 + i * 16, 20, 12, 3, active ? GREEN : i * 16 < v->sequence_length ? PANEL : BACK);
     }
     if (first || (changed & (1U << 22)))
-        text(142, 7, step_follow ? "FOLLOW" : "EDIT  ", 1, step_follow ? GREEN : AMBER, BACK);
+        textb(142, 7, step_follow ? "FOLLOW" : "EDIT  ", 1, step_follow ? GREEN : AMBER);
     if (first || (changed & ((1U << 16) | (1U << 17) | (1U << 23) | (7U << 29)))) {
         uint16_t color = writing ? AMBER : PANEL;
         paint_fill(181, 7, 51, 13, color);
@@ -532,6 +544,12 @@ static __attribute__((noinline)) void header(const struct groove_view *v)
         text(192, 10, writing ? count ? counting : v->playing ? "REC" : "STEP"
              : groove_arp_enabled(track) ? "ARP" : "LIVE", 1, writing ? BACK : TEXT, color);
     }
+}
+static void track_tag(const char *source) /* the row's "T1 DX7" */
+{
+    textb(8, 35, "T", 1, colors[track]);
+    numberb(14, 35, track + 1, 1, 1, colors[track]);
+    textb(30, 35, source, 1, TEXT);
 }
 static __attribute__((noinline)) void overview(const struct groove_view v[8])
 {
@@ -542,13 +560,13 @@ static __attribute__((noinline)) void overview(const struct groove_view v[8])
         ((unsigned)v[track].sequence_length << 10), project_name, 12);
     if (title != cache->title_cache) {
         cache->title_cache = title;
-        paint_fill(0, 32, 240, 13, BACK);
-        text(8, 35, project_name, 1, ACCENT, BACK);
-        text(86, 35, "OPEN " FM1_RELEASE_VERSION, 1, DIM, BACK);
-        text(146, 35, step_follow ? "PAGE" : "STEP", 1, DIM, BACK);
-        number(178, 35, step_follow ? first + 1 : cursor + 1, 2, 1, TEXT, BACK);
-        text(190, 35, step_follow ? "-" : "/", 1, DIM, BACK);
-        number(196, 35, step_follow ? first + 16 : v[track].sequence_length, 2, 1, TEXT, BACK);
+        fillb(0, 32, 240, 13);
+        textb(8, 35, project_name, 1, ACCENT);
+        textb(86, 35, "OPEN " FM1_RELEASE_VERSION, 1, DIM);
+        textb(146, 35, step_follow ? "PAGE" : "STEP", 1, DIM);
+        numberb(178, 35, step_follow ? first + 1 : cursor + 1, 2, 1, TEXT);
+        textb(190, 35, step_follow ? "-" : "/", 1, DIM);
+        numberb(196, 35, step_follow ? first + 16 : v[track].sequence_length, 2, 1, TEXT);
     }
     static const char *const chip_names[] = {"PSG YM", "PSG AY", "PSG NOIS", "PSG MIX"};
     for (unsigned t = 0; t < 8; ++t) {
@@ -561,7 +579,7 @@ static __attribute__((noinline)) void overview(const struct groove_view v[8])
                         ((uint32_t)groove_track_role(t) << 23);
         if (meta != cache->row_cache[t]) {
             cache->row_cache[t] = meta;
-            paint_fill(5, y, 71, 16, BACK);
+            fillb(5, y, 71, 16);
             uint16_t bg = t == track ? colors[t] : PANEL;
             paint_fill(6, y, 18, 16, bg);
             number(12, y + 5, t + 1, 1, 1, t == track ? BACK : colors[t], bg);
@@ -585,7 +603,7 @@ static __attribute__((noinline)) void overview(const struct groove_view v[8])
                  : v[t].modified ? "EDITED"
                                  : "",
                  1, DIM, BACK);
-            number(214, y + 1, v[t].volume, 3, 1, t == track ? TEXT : DIM, BACK);
+            numberb(214, y + 1, v[t].volume, 3, 1, t == track ? TEXT : DIM);
         }
         for (unsigned i = 0; i < 16; ++i) {
             unsigned step = first + i;
@@ -659,19 +677,16 @@ static __attribute__((noinline)) void steps(const struct groove_view *v)
         ((uint32_t)v->sequence_length << 14) | ((uint32_t)v->next_length << 21);
     if (title != cache->title_cache) {
         cache->title_cache = title;
-        paint_fill(0, 32, 240, 34, BACK);
-        text(8, 35, "T", 1, colors[track], BACK);
-        number(14, 35, track + 1, 1, 1, colors[track], BACK);
-        text(30, 35,
+        fillb(0, 32, 240, 34);
+        track_tag(
              groove_pad_count(track) != 0                ? groove_pad_name(track, drum)
              : groove_source_type(track) == GROOVE_303   ? "303 STEPS"
              : groove_source_type(track) == GROOVE_PSG   ? "PSG STEPS"
              : groove_source_type(track) == GROOVE_PLUCK ? "PLUCK STEPS"
-                                                         : "DX7 STEPS",
-             1, TEXT, BACK);
+                                                         : "DX7 STEPS");
         unsigned pending = v->sequence_length != v->next_length;
-        text(174, 35, pending ? "NEXT" : "LEN ", 1, pending ? AMBER : DIM, BACK);
-        number(204, 35, v->next_length, 2, 1, pending ? AMBER : colors[track], BACK);
+        textb(174, 35, pending ? "NEXT" : "LEN ", 1, pending ? AMBER : DIM);
+        numberb(204, 35, v->next_length, 2, 1, pending ? AMBER : colors[track]);
         for (unsigned p = 0; p < 4; ++p) {
             uint16_t bg = p == first / 16 ? colors[track] : p * 16 < v->sequence_length ? PANEL : BACK;
             paint_fill(8 + p * 57, 50, 53, 14, bg);
@@ -747,14 +762,12 @@ static __attribute__((noinline, cold, minsize)) void fm_draw(const uint8_t patch
         memcpy(&shape, patch + 141, 3);
     if (cache->title_cache != title) {
         cache->title_cache = title;
-        paint_fill(0, 32, 240, 40, BACK);
-        text(8, 35, "T", 1, colors[track], BACK);
-        number(14, 35, track + 1, 1, 1, colors[track], BACK);
-        text(30, 35, "DX7", 1, TEXT, BACK);
-        text(64, 35, page == FM_ENV ? "AMP ENV" : p->title, 1, colors[track], BACK);
+        fillb(0, 32, 240, 40);
+        track_tag("DX7");
+        textb(64, 35, page == FM_ENV ? "AMP ENV" : p->title, 1, colors[track]);
         if (page == FM_EDIT) {
-            number(206, 35, operator_page[track][op] + 1, 1, 1, TEXT, BACK);
-            text(212, 35, op < 6 ? "/6" : op == 6 ? "/2" : "/1", 1, DIM, BACK);
+            numberb(206, 35, operator_page[track][op] + 1, 1, 1, TEXT);
+            textb(212, 35, op < 6 ? "/6" : op == 6 ? "/2" : "/1", 1, DIM);
         }
         for (unsigned i = 0; i < 6; ++i) {
             uint16_t bg = i == op && page == FM_EDIT ? colors[track] : PANEL;
@@ -768,10 +781,10 @@ static __attribute__((noinline, cold, minsize)) void fm_draw(const uint8_t patch
     if (cache->middle_shape != shape || cache->row_cache[0] != context) {
         cache->row_cache[0] = context;
         cache->middle_shape = shape;
-        paint_fill(0, 72, 240, 108, BACK);
+        fillb(0, 72, 240, 108);
         if (page == FM_ENV) {
-            text(8, 80, controls->enabled ? "ADSR ON" : "ADSR OFF", 1, GREEN, BACK);
-            text(8, 95, controls->enabled ? "AMPLITUDE SHAPE" : "PREVIEW / BYPASSED", 1, DIM, BACK);
+            textb(8, 80, controls->enabled ? "ADSR ON" : "ADSR OFF", 1, GREEN);
+            textb(8, 95, controls->enabled ? "AMPLITUDE SHAPE" : "PREVIEW / BYPASSED", 1, DIM);
             /* Match adsr_config_set's millisecond/level mapping. Sustain has
              * an illustrative 400 ms hold; it lasts until the key is released. */
             unsigned a = 8U * controls->envelope[0], d = 100U + 8U * controls->envelope[1];
@@ -785,8 +798,8 @@ static __attribute__((noinline, cold, minsize)) void fm_draw(const uint8_t patch
         } else if (page == FM_EDIT &&
                    (fm_group == 1 || fm_group == 2 || fm_group == 6 || fm_group == 7)) {
             unsigned offset = op == 6 ? 126 : (5 - op) * 21;
-            text(8, 80, "RATE / LEVEL PREVIEW", 1, DIM, BACK);
-            text(8, 94, "HIGH RATE = FAST   L3 HOLDS", 1, DIM, BACK);
+            textb(8, 80, "RATE / LEVEL PREVIEW", 1, DIM);
+            textb(8, 94, "HIGH RATE = FAST   L3 HOLDS", 1, DIM);
             if (op == 6)
                 paint_fill(20, 134, 201, 1, PANEL);
             int x = 20, last_y = 166 - patch[offset + 7] * 64 / 99;
@@ -804,11 +817,11 @@ static __attribute__((noinline, cold, minsize)) void fm_draw(const uint8_t patch
         } else if (page == FM_LFO) {
             static const char *const waves[6] = {"TRIANGLE", "SAW DOWN", "SAW UP",
                                                  "SQUARE",   "SINE",     "S/HOLD"};
-            text(8, 91, "LFO WAVE", 1, DIM, BACK);
-            text(8, 110, waves[patch[142] % 6], 2, colors[track], BACK);
-            text(8, 146, patch[141] ? "KEY SYNC ON" : "KEY SYNC OFF", 1, TEXT, BACK);
-            text(124, 146, "PM SENS", 1, DIM, BACK);
-            number(178, 146, patch[143], 1, 1, TEXT, BACK);
+            textb(8, 91, "LFO WAVE", 1, DIM);
+            textb(8, 110, waves[patch[142] % 6], 2, colors[track]);
+            textb(8, 146, patch[141] ? "KEY SYNC ON" : "KEY SYNC OFF", 1, TEXT);
+            textb(124, 146, "PM SENS", 1, DIM);
+            numberb(178, 146, patch[143], 1, 1, TEXT);
         } else
             algorithm_draw(patch[134], controls->operators);
     }
@@ -816,17 +829,17 @@ static __attribute__((noinline, cold, minsize)) void fm_draw(const uint8_t patch
     sig = signature(sig, patch + 145, 10);
     if (cache->middle_cache == sig) return;
     cache->middle_cache = sig;
-    paint_fill(0, 180, 240, 12, BACK);
-    text(8, 181, "ALG", 1, DIM, BACK);
-    number(32, 181, patch[134] + 1, 2, 1, TEXT, BACK);
-    text(60, 181, "FB", 1, DIM, BACK);
-    number(78, 181, patch[135], 1, 1, TEXT, BACK);
-    text(104, 181, controls->mono ? "MONO" : "POLY 8", 1, DIM, BACK);
+    fillb(0, 180, 240, 12);
+    textb(8, 181, "ALG", 1, DIM);
+    numberb(32, 181, patch[134] + 1, 2, 1, TEXT);
+    textb(60, 181, "FB", 1, DIM);
+    numberb(78, 181, patch[135], 1, 1, TEXT);
+    textb(104, 181, controls->mono ? "MONO" : "POLY 8", 1, DIM);
     char patch_name[11];
     for (unsigned i = 0; i < 10; ++i)
         patch_name[i] = patch[145 + i] >= 32 && patch[145 + i] <= 126 ? (char)patch[145 + i] : '?';
     patch_name[10] = 0;
-    text(164, 181, page == FM_ENV ? "ENV OVERLAY" : patch_name, 1, DIM, BACK);
+    textb(164, 181, page == FM_ENV ? "ENV OVERLAY" : patch_name, 1, DIM);
 }
 static unsigned tone_part(void) { return groove_pad_count(track) != 0 ? drum_parts[track] : 0; }
 static unsigned tone_slot(void)
@@ -859,16 +872,16 @@ static __attribute__((noinline)) void track_lfo_draw(void)
     uint32_t sig = signature(track | (frame_views[track].type << 8), v, 4);
     if (cache->title_cache == sig) return;
     cache->title_cache = sig;
-    paint_fill(0, 32, 240, 163, BACK);
-    text(8, 40, "TRACK LFO", 2, colors[track], BACK);
-    text(8, 62, "T", 1, colors[track], BACK);
-    number(14, 62, track + 1, 1, 1, colors[track], BACK);
-    text(32, 62, source_names[frame_views[track].type], 1, TEXT, BACK);
-    text(8, 80, v[1] ? "MODULATION ON" : "DEPTH 0 = OFF", 1, v[1] ? GREEN : DIM, BACK);
-    text(8, 100, v[2] ? "STEREO PAN" : "VOLUME TREMOLO", 2, TEXT, BACK);
-    text(8, 140, "K1 RATE    K2 DEPTH", 1, DIM, BACK);
-    text(8, 159, "K3 TARGET  K4 WAVE", 1, DIM, BACK);
-    text(8, 181, "KEYS PLAY  SELECT TRACK", 1, DIM, BACK);
+    fillb(0, 32, 240, 163);
+    textb(8, 40, "TRACK LFO", 2, colors[track]);
+    textb(8, 62, "T", 1, colors[track]);
+    numberb(14, 62, track + 1, 1, 1, colors[track]);
+    textb(32, 62, source_names[frame_views[track].type], 1, TEXT);
+    textb(8, 80, v[1] ? "MODULATION ON" : "DEPTH 0 = OFF", 1, v[1] ? GREEN : DIM);
+    textb(8, 100, v[2] ? "STEREO PAN" : "VOLUME TREMOLO", 2, TEXT);
+    textb(8, 140, "K1 RATE    K2 DEPTH", 1, DIM);
+    textb(8, 159, "K3 TARGET  K4 WAVE", 1, DIM);
+    textb(8, 181, "KEYS PLAY  SELECT TRACK", 1, DIM);
     static const char *const labels[] = {"RATE Hz", "DEPTH", "TARGET", "WAVE"};
     static const char *const waves[] = {"TRI", "SQUARE", "SAW UP", "SAW DOWN"};
     for (unsigned i = 0; i < 4; ++i) {
@@ -881,7 +894,7 @@ static __attribute__((noinline)) void track_lfo_draw(void)
         else strcpy(value, i == 2 ? (v[i] ? "PAN" : "VOLUME") : waves[v[i]]);
         knob(i, labels[i], value, colors[i]);
     }
-    text(8, 231, "LFO BACK  HOME TRACKS", 1, DIM, BACK);
+    textb(8, 231, "LFO BACK  HOME TRACKS", 1, DIM);
 }
 static void tone_label(unsigned parameter, unsigned value, const fm1_param_t *p, char out[12])
 {
@@ -905,7 +918,7 @@ static __attribute__((noinline)) void tone_draw(const uint8_t values[GROOVE_TONE
     uint32_t title = track | (part << 3) | (pg << 7) | (type << 12) | (view.mono << 16);
     if (cache->title_cache != title) {
         cache->title_cache = title;
-        paint_fill(0, 32, 240, 163, BACK);
+        fillb(0, 32, 240, 163);
         text(8, 35,
              page == FM_ENV ? "SOURCE ENV" :
              type == GROOVE_303      ? "303 EDIT"
@@ -914,11 +927,11 @@ static __attribute__((noinline)) void tone_draw(const uint8_t values[GROOVE_TONE
              : type == GROOVE_SAMPLE ? "SAMPLER"
                                      : "808 EDIT",
              2, colors[track], BACK);
-        text(150, 38, "T", 1, colors[track], BACK);
-        number(156, 38, track + 1, 1, 1, colors[track], BACK);
-        number(192, 38, pg + 1, 1, 1, TEXT, BACK);
-        text(198, 38, "/", 1, DIM, BACK);
-        number(204, 38, page == FM_ENV ? 1 : (groove_tone_count(track, part) + 3) / 4, 1, 1, TEXT, BACK);
+        textb(150, 38, "T", 1, colors[track]);
+        numberb(156, 38, track + 1, 1, 1, colors[track]);
+        numberb(192, 38, pg + 1, 1, 1, TEXT);
+        textb(198, 38, "/", 1, DIM);
+        numberb(204, 38, page == FM_ENV ? 1 : (groove_tone_count(track, part) + 3) / 4, 1, 1, TEXT);
         static const char *const pages[] = {"FILTER", "OSCILLATOR / LEVEL", "DRIVE / SLIDE"};
         text(8, 56,
              page == FM_ENV && !groove_pad_count(track) ? source_names[type]
@@ -950,9 +963,9 @@ static __attribute__((noinline)) void tone_draw(const uint8_t values[GROOVE_TONE
             unsigned y = 78 + i * 24;
             char label[12];
             tone_label(parameter, value, p, label);
-            text(8, y, p->name, 1, DIM, BACK);
-            paint_fill(56, y, 36, 7, BACK);
-            text(56, y, label, 1, TEXT, BACK);
+            textb(8, y, p->name, 1, DIM);
+            fillb(56, y, 36, 7);
+            textb(56, y, label, 1, TEXT);
             paint_fill(100, y, 132, 8, PANEL);
             unsigned width = value * 132U / p->max;
             if (width)
@@ -978,9 +991,9 @@ static __attribute__((noinline)) void mix_draw(const struct groove_view v[8])
     unsigned bank = track / 4;
     if (cache->title_cache != bank) {
         cache->title_cache = bank;
-        paint_fill(0, 32, 240, 33, BACK);
-        text(8, 35, "MIX  8 TRACKS", 1, TEXT, BACK);
-        text(8, 51, "KEYS 1-8 MUTE  9-16 SOLO", 1, DIM, BACK);
+        fillb(0, 32, 240, 33);
+        textb(8, 35, "MIX  8 TRACKS", 1, TEXT);
+        textb(8, 51, "KEYS 1-8 MUTE  9-16 SOLO", 1, DIM);
     }
     for (unsigned i = 0; i < 16; ++i) {
         unsigned t = i & 7U, on = i < 8 ? v[t].muted : v[t].solo;
@@ -1002,8 +1015,8 @@ static void radio_line(unsigned slot, unsigned y, const char *value, uint16_t co
     uint32_t sig = signature(color, value, (unsigned)strlen(value));
     if (cache->tile_cache[slot] == sig) return;
     cache->tile_cache[slot] = sig;
-    paint_fill(8, y, 224, 7, BACK);
-    text(8, y, value, 1, color, BACK);
+    fillb(8, y, 224, 7);
+    textb(8, y, value, 1, color);
 }
 static __attribute__((noinline)) void draw_ble(const struct fm1_ble_status *status)
 {
@@ -1017,9 +1030,9 @@ static __attribute__((noinline)) void draw_ble(const struct fm1_ble_status *stat
         cache->title_cache = ble_view;
         memset(cache->row_cache, 0xff, sizeof cache->row_cache);
         memset(cache->tile_cache, 0xff, sizeof cache->tile_cache);
-        paint_fill(0, 0, 240, 240, BACK);
+        fillb(0, 0, 240, 240);
         paint_fill(0, 29, 240, 1, PANEL);
-        text(8, 8, ble_view ? "MIDI HOST" : "BLUETOOTH", 2, ACCENT, BACK);
+        textb(8, 8, ble_view ? "MIDI HOST" : "BLUETOOTH", 2, ACCENT);
     }
     const char *state = !on ? "BLUETOOTH OFF" : !frame_radio.ready ? "RADIO AVAILABLE ON DEVICE"
         : status->pending ? "APPLYING SETTINGS"
@@ -1047,9 +1060,9 @@ static __attribute__((noinline)) void draw_ble(const struct fm1_ble_status *stat
             if (cache->row_cache[i] == sig) continue;
             cache->row_cache[i] = sig;
             unsigned y = 61 + i * 30;
-            paint_fill(8, y, 224, 20, BACK);
-            text(8, y + 4, labels[i], 1, TEXT, BACK);
-            text(146, y, names[i], 2, i && i < 3 && !on ? DIM : ACCENT, BACK);
+            fillb(8, y, 224, 20);
+            textb(8, y + 4, labels[i], 1, TEXT);
+            textb(146, y, names[i], 2, i && i < 3 && !on ? DIM : ACCENT);
         }
         const char *audio = !on || !values[1] ? "AUDIO OFF" : frame_radio.audio_playing ? "AUDIO PLAYING"
             : frame_radio.audio_connected ? "AUDIO CONNECTED" : "AUDIO WAITING FOR CONNECTION";
@@ -1098,31 +1111,31 @@ static __attribute__((noinline)) void project_draw(void)
     sig = signature(sig, &project_stored_result, sizeof project_stored_result);
     if (cache->title_cache != sig) {
         cache->title_cache = sig;
-        paint_fill(8, 40, 224, 7, BACK);
-        text(8, 40, "USER", 1, DIM, BACK);
-        number(38, 40, project_slot + 1, 2, 1, ACCENT, BACK);
-        text(52, 40, "/16", 1, DIM, BACK);
-        text(78, 40, project_stored_result < 0 ? "READ ERROR" : project_stored, 1, TEXT, BACK);
+        fillb(8, 40, 224, 7);
+        textb(8, 40, "USER", 1, DIM);
+        numberb(38, 40, project_slot + 1, 2, 1, ACCENT);
+        textb(52, 40, "/16", 1, DIM);
+        textb(78, 40, project_stored_result < 0 ? "READ ERROR" : project_stored, 1, TEXT);
     }
     sig = signature(name_cursor, name, 12);
     if (cache->middle_cache != sig) {
         cache->middle_cache = sig;
-        paint_fill(8, 77, 144, 18, BACK);
-        text(8, 77, name, 2, ACCENT, BACK);
+        fillb(8, 77, 144, 18);
+        textb(8, 77, name, 2, ACCENT);
         paint_fill(8 + name_cursor * 12, 93, 10, 2, ACCENT);
     }
     sig = project_reload;
     if (cache->row_cache[0] != sig) {
         cache->row_cache[0] = sig;
-        paint_fill(8, 126, 224, 26, BACK);
-        text(8, 126, project_reload ? "OVERWRITE SELECTED SLOT?" : "SAVE WRITE PROJECT", 1, TEXT, BACK);
-        text(8, 145, project_reload ? "SAVE CONFIRM  HOME CANCEL" : "K1 CURSOR  K2 LETTER", 1, DIM, BACK);
+        fillb(8, 126, 224, 26);
+        textb(8, 126, project_reload ? "OVERWRITE SELECTED SLOT?" : "SAVE WRITE PROJECT", 1, TEXT);
+        textb(8, 145, project_reload ? "SAVE CONFIRM  HOME CANCEL" : "K1 CURSOR  K2 LETTER", 1, DIM);
     }
     if (cache->hint_cache != 1U) {
         cache->hint_cache = 1U;
-        text(8, 59, "WORKING NAME", 1, DIM, BACK);
-        text(8, 105, "SELECT / PRESETS CHOOSE SLOT", 1, DIM, BACK);
-        text(8, 224, "HOME CANCEL  EDIT SOUND", 1, DIM, BACK);
+        textb(8, 59, "WORKING NAME", 1, DIM);
+        textb(8, 105, "SELECT / PRESETS CHOOSE SLOT", 1, DIM);
+        textb(8, 224, "HOME CANCEL  EDIT SOUND", 1, DIM);
     }
     sig = (unsigned)(project_result + 16) | (project_operation << 16);
     if (cache->row_cache[1] == sig) return;
@@ -1137,8 +1150,8 @@ static __attribute__((noinline)) void project_draw(void)
                          : project_operation == 1                   ? "SAVED"
                          : project_operation == 3                   ? "SAVING"
                                                                     : "READY";
-    paint_fill(8, 180, 224, 7, BACK);
-    text(8, 180, status, 1, project_result ? AMBER : GREEN, BACK);
+    fillb(8, 180, 224, 7);
+    textb(8, 180, status, 1, project_result ? AMBER : GREEN);
 }
 static __attribute__((noinline)) void preset_draw(void)
 {
@@ -1147,15 +1160,15 @@ static __attribute__((noinline)) void preset_draw(void)
     sig = signature(sig, &project_result, sizeof project_result);
     if (cache->middle_cache == sig) return;
     cache->middle_cache = sig;
-    paint_fill(0, 30, 240, 210, BACK);
-    text(8, 42, preset_bank ? "FACTORY PRESETS" : "USER PROJECTS", 1, DIM, BACK);
-    number(8, 65, preset_slot + 1, 2, 2, ACCENT, BACK);
-    text(38, 65, "/16", 2, DIM, BACK);
-    text(8, 97, project_stored_result < 0 ? "READ ERROR" : project_stored, 2, TEXT, BACK);
-    text(8, 127, "SELECT / PRESETS LOAD", 1, TEXT, BACK);
-    text(8, 148, "PLAY LOAD + RUN   SAVE PROJECT", 1, TEXT, BACK);
-    text(8, 170, "WHITE KEYS 1-16 LOAD DIRECTLY", 1, DIM, BACK);
-    text(8, 191, "K1 BANK: USER / FACTORY", 1, DIM, BACK);
+    fillb(0, 30, 240, 210);
+    textb(8, 42, preset_bank ? "FACTORY PRESETS" : "USER PROJECTS", 1, DIM);
+    numberb(8, 65, preset_slot + 1, 2, 2, ACCENT);
+    textb(38, 65, "/16", 2, DIM);
+    textb(8, 97, project_stored_result < 0 ? "READ ERROR" : project_stored, 2, TEXT);
+    textb(8, 127, "SELECT / PRESETS LOAD", 1, TEXT);
+    textb(8, 148, "PLAY LOAD + RUN   SAVE PROJECT", 1, TEXT);
+    textb(8, 170, "WHITE KEYS 1-16 LOAD DIRECTLY", 1, DIM);
+    textb(8, 191, "K1 BANK: USER / FACTORY", 1, DIM);
     text(8, 213, project_result == GROOVE_PROJECT_EMPTY ? "EMPTY SLOT - CHOOSE ANOTHER" :
          project_result ? "LOAD FAILED - CURRENT KEPT" : "HOME BACK   HOME+SAVE UNDO", 1,
          project_result ? AMBER : DIM, BACK);
@@ -1169,18 +1182,18 @@ static __attribute__((noinline)) void name_draw(void)
     cache->middle_cache = sig;
     if (cache->title_cache != 1U) {
         cache->title_cache = 1U;
-        text(8, 40, "DX7 PATCH NAME", 1, TEXT, BACK);
-        text(8, 120, "SELECT CURSOR  K1 LETTER", 1, TEXT, BACK);
-        text(8, 145, "SAVE STORES WITH PROJECT", 1, DIM, BACK);
-        text(8, 171, "WEB IMPORT / EXPORT .SYX", 1, DIM, BACK);
-        text(8, 225, "HOME EXIT  EDIT SOUND", 1, DIM, BACK);
+        textb(8, 40, "DX7 PATCH NAME", 1, TEXT);
+        textb(8, 120, "SELECT CURSOR  K1 LETTER", 1, TEXT);
+        textb(8, 145, "SAVE STORES WITH PROJECT", 1, DIM);
+        textb(8, 171, "WEB IMPORT / EXPORT .SYX", 1, DIM);
+        textb(8, 225, "HOME EXIT  EDIT SOUND", 1, DIM);
     }
-    paint_fill(8, 76, 120, 19, BACK);
+    fillb(8, 76, 120, 19);
     char name[11];
     for (unsigned i = 0; i < 10; ++i)
         name[i] = patch[145 + i] >= 32 && patch[145 + i] <= 126 ? (char)patch[145 + i] : '?';
     name[10] = 0;
-    text(8, 76, name, 2, ACCENT, BACK);
+    textb(8, 76, name, 2, ACCENT);
     paint_fill(8 + name_cursor * 12, 93, 10, 2, ACCENT);
 }
 static __attribute__((noinline)) void effects_draw(void)
@@ -1192,9 +1205,9 @@ static __attribute__((noinline)) void effects_draw(void)
         paint_fill(8, 40, 224, 36, BACK);
         if (effects_page) text(8, 40, effects_page == 2 ? "DELAY / SEQ TAP" : "SHARED FX / ALL TRACKS", 1, TEXT, BACK);
         else {
-            text(8, 40, "TRACK", 1, TEXT, BACK);
-            number(44, 40, track + 1U, 1, 1, ACCENT, BACK);
-            text(60, 40, source_names[frame_views[track].type], 1, TEXT, BACK);
+            textb(8, 40, "TRACK", 1, TEXT);
+            numberb(44, 40, track + 1U, 1, 1, ACCENT);
+            textb(60, 40, source_names[frame_views[track].type], 1, TEXT);
         }
         text(8, 64, "PRESETS: TRACK / SHARED / DELAY", 1, DIM, BACK);
     }
@@ -1315,24 +1328,24 @@ static __attribute__((noinline)) void edit_page_draw(unsigned visible)
     }
     if (cache->middle_cache == sig) return;
     cache->middle_cache = sig;
-    paint_fill(0, 32, 240, 208, BACK);
+    fillb(0, 32, 240, 208);
     memset(cache->foot_cache, 0xff, sizeof cache->foot_cache);
     if (visible == SOURCE) {
-        text(8, 42, "SELECT SOUND SOURCE", 1, TEXT, BACK);
-        text(8, 78, source_names[source_preview], 2, ACCENT, BACK);
-        text(8, 120, "SAVE APPLY  HOME CANCEL", 1, TEXT, BACK);
-        text(8, 148, "NEW SOURCE RESETS ITS TIMBRE", 1, DIM, BACK);
-        text(8, 165, "DRUM / PITCH CHANGE CLEARS STEPS", 1, AMBER, BACK);
-        text(8, 196, source_result ? "NOT ENOUGH MEMORY - RETRY" : "UNDO IN HOLD SEQ MENU", 1, source_result ? AMBER : DIM, BACK);
-        text(8, 231, "ALGO / K2 CHOOSE  SAVE APPLY", 1, DIM, BACK);
+        textb(8, 42, "SELECT SOUND SOURCE", 1, TEXT);
+        textb(8, 78, source_names[source_preview], 2, ACCENT);
+        textb(8, 120, "SAVE APPLY  HOME CANCEL", 1, TEXT);
+        textb(8, 148, "NEW SOURCE RESETS ITS TIMBRE", 1, DIM);
+        textb(8, 165, "DRUM / PITCH CHANGE CLEARS STEPS", 1, AMBER);
+        textb(8, 196, source_result ? "NOT ENOUGH MEMORY - RETRY" : "UNDO IN HOLD SEQ MENU", 1, source_result ? AMBER : DIM);
+        textb(8, 231, "ALGO / K2 CHOOSE  SAVE APPLY", 1, DIM);
     } else if (visible == ACTIONS) {
-        if (action_confirm) text(8, 38, "REPLACE PATTERN DATA?", 1, AMBER, BACK);
+        if (action_confirm) textb(8, 38, "REPLACE PATTERN DATA?", 1, AMBER);
         else {
-            text(8, 38, "T", 1, DIM, BACK); number(16, 38, track + 1, 1, 1, TEXT, BACK);
-            text(36, 38, "STEP", 1, DIM, BACK); number(68, 38, cursor + 1, 2, 1, ACCENT, BACK);
-            text(94, 38, "PAGE", 1, DIM, BACK); number(126, 38, cursor / 16 + 1, 1, 1, ACCENT, BACK);
+            textb(8, 38, "T", 1, DIM); numberb(16, 38, track + 1, 1, 1, TEXT);
+            textb(36, 38, "STEP", 1, DIM); numberb(68, 38, cursor + 1, 2, 1, ACCENT);
+            textb(94, 38, "PAGE", 1, DIM); numberb(126, 38, cursor / 16 + 1, 1, 1, ACCENT);
             unsigned count = groove_edit_clipboard_count();
-            text(154, 38, count == 1 ? "CLIP STEP" : count == 16 ? "CLIP PAGE" : count ? "CLIP TRACK" : "CLIP EMPTY", 1, DIM, BACK);
+            textb(154, 38, count == 1 ? "CLIP STEP" : count == 16 ? "CLIP PAGE" : count ? "CLIP TRACK" : "CLIP EMPTY", 1, DIM);
         }
         unsigned first = action < 4 ? 0 : action > ACTION_COUNT - 5 ? ACTION_COUNT - 8 : action - 3;
         for (unsigned i = 0; i < 8; ++i) {
@@ -1341,18 +1354,18 @@ static __attribute__((noinline)) void edit_page_draw(unsigned visible)
             paint_fill(6, y, 228, 17, bg);
             text(10, y + 5, actions[at], 1, at == action ? ACCENT : DIM, bg);
         }
-        text(8, 213, notice ? notice : "SELECT ACTION  SAVE EXECUTE", 1, TEXT, BACK);
-        text(8, 231, action_confirm ? "SAVE CONFIRM   HOME CANCEL" : "PRESETS STEP  OCT PAGE  SAVE DO", 1, DIM, BACK);
+        textb(8, 213, notice ? notice : "SELECT ACTION  SAVE EXECUTE", 1, TEXT);
+        textb(8, 231, action_confirm ? "SAVE CONFIRM   HOME CANCEL" : "PRESETS STEP  OCT PAGE  SAVE DO", 1, DIM);
     } else if (visible == ARP_EDIT) {
-        text(8, 40, "ARPEGGIATOR", 2, ACCENT, BACK);
-        text(184, 40, "T", 2, colors[track], BACK);
-        number(198, 40, track + 1, 1, 2, colors[track], BACK);
-        text(8, 72, !groove_arp_enabled(track) ? "OFF - TAP ARP TO ENABLE" : groove_arp_setting(track, 5) ? "ON - HOLD LATCHES YOUR CHORD" : "ON - HOLD KEYS TO PLAY", 1, TEXT, BACK);
-        text(8, 96, "SELECT TRACK  K1-K4 ADJUST", 1, DIM, BACK);
-        text(8, 118, "RATE FOLLOWS BPM / MIDI CLOCK", 1, DIM, BACK);
-        text(8, 140, arp_page ? "RELEASE ALL KEYS FOR A NEW CHORD" : groove_pad_count(track) ? "DRUMS: RANGE / GATE UNAVAILABLE" : "UP / DOWN / UP-DOWN / RANDOM", 1, DIM, BACK);
-        text(8, 162, "SETTINGS SAVED WITH PROJECT", 1, DIM, BACK);
-        text(8, 180, arp_page ? "2/2 SWING / HOLD  ALGO PAGE" : "1/2 NOTES  ALGO PAGE", 1, ACCENT, BACK);
+        textb(8, 40, "ARPEGGIATOR", 2, ACCENT);
+        textb(184, 40, "T", 2, colors[track]);
+        numberb(198, 40, track + 1, 1, 2, colors[track]);
+        textb(8, 72, !groove_arp_enabled(track) ? "OFF - TAP ARP TO ENABLE" : groove_arp_setting(track, 5) ? "ON - HOLD LATCHES YOUR CHORD" : "ON - HOLD KEYS TO PLAY", 1, TEXT);
+        textb(8, 96, "SELECT TRACK  K1-K4 ADJUST", 1, DIM);
+        textb(8, 118, "RATE FOLLOWS BPM / MIDI CLOCK", 1, DIM);
+        textb(8, 140, arp_page ? "RELEASE ALL KEYS FOR A NEW CHORD" : groove_pad_count(track) ? "DRUMS: RANGE / GATE UNAVAILABLE" : "UP / DOWN / UP-DOWN / RANDOM", 1, DIM);
+        textb(8, 162, "SETTINGS SAVED WITH PROJECT", 1, DIM);
+        textb(8, 180, arp_page ? "2/2 SWING / HOLD  ALGO PAGE" : "1/2 NOTES  ALGO PAGE", 1, ACCENT);
         static const char *const rates[] = {"1/4", "1/8", "1/16", "1/32"};
         static const char *const modes[] = {"UP", "DOWN", "UP-DN", "RANDOM"};
         char range[12], gate[12];
@@ -1369,33 +1382,33 @@ static __attribute__((noinline)) void edit_page_draw(unsigned visible)
             knob(1, "HOLD", groove_arp_setting(track, 5) ? "ON" : "OFF", colors[1]);
             knob(2, "-", "--", colors[2]); knob(3, "-", "--", colors[3]);
         }
-        text(8, 231, notice ? notice : "ARP ON/OFF   HOME BACK", 1, DIM, BACK);
+        textb(8, 231, notice ? notice : "ARP ON/OFF   HOME BACK", 1, DIM);
     } else {
-        text(8, 40, "DX7 QUICK EDIT", 2, ACCENT, BACK);
+        textb(8, 40, "DX7 QUICK EDIT", 2, ACCENT);
         char name[11]; memcpy(name, frame_patch + 145, 10); name[10] = 0;
-        number(8, 76, frame_views[track].program + 1, 2, 1, ACCENT, BACK);
-        text(20, 76, "/16", 1, DIM, BACK);
-        text(42, 76, frame_views[track].modified ? "*" : " ", 1, AMBER, BACK);
-        text(56, 72, name, 2, TEXT, BACK);
-        text(8, 102, "PRESETS SELECT VOICE", 1, TEXT, BACK);
-        text(8, 126, "HOLD EDIT OPERATOR PARAMETERS", 1, DIM, BACK);
-        text(8, 148, "ENV ENVELOPE    LFO MODULATION", 1, DIM, BACK);
-        text(8, 170, "SCL SCALING     KEYS PLAY", 1, DIM, BACK);
+        numberb(8, 76, frame_views[track].program + 1, 2, 1, ACCENT);
+        textb(20, 76, "/16", 1, DIM);
+        textb(42, 76, frame_views[track].modified ? "*" : " ", 1, AMBER);
+        textb(56, 72, name, 2, TEXT);
+        textb(8, 102, "PRESETS SELECT VOICE", 1, TEXT);
+        textb(8, 126, "HOLD EDIT OPERATOR PARAMETERS", 1, DIM);
+        textb(8, 148, "ENV ENVELOPE    LFO MODULATION", 1, DIM);
+        textb(8, 170, "SCL SCALING     KEYS PLAY", 1, DIM);
         static const char *const labels[] = {"ALGORITHM", "FEEDBACK", "TRANSPOSE", "LEVEL"};
         int values[] = {frame_patch[134] + 1, frame_patch[135], (int)frame_patch[144] - 24, frame_views[track].volume};
         for (unsigned i = 0; i < 4; ++i) { char value[12]; decimal(value, values[i], 1); knob(i, labels[i], value, colors[i]); }
-        text(8, 231, "EDIT BACK  HOLD EDIT MORE", 1, DIM, BACK);
+        textb(8, 231, "EDIT BACK  HOLD EDIT MORE", 1, DIM);
     }
 }
 static __attribute__((noinline, cold, minsize)) void boot_draw(void)
 {
     if (cache->title_cache != 0) {
         cache->title_cache = 0;
-        text(86, 48, "FM1", 4, TEXT, BACK);
-        text(81, 98, "OFFICIAL OPEN", 1, ACCENT, BACK);
+        textb(86, 48, "FM1", 4, TEXT);
+        textb(81, 98, "OFFICIAL OPEN", 1, ACCENT);
         text((240 - 12 * (sizeof FM1_RELEASE_VERSION - 1)) / 2, 120,
              FM1_RELEASE_VERSION, 2, TEXT, BACK);
-        text(102, 208, "M-VAVE", 1, DIM, BACK);
+        textb(102, 208, "M-VAVE", 1, DIM);
     }
     if (cache->middle_cache == boot_phase) return;
     cache->middle_cache = boot_phase;
@@ -1413,20 +1426,18 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
     if (cache->title_cache != row) {
         static const char *const source[GROOVE_SOURCES] = {"DX7", "303", "808", "PSG", "PLUK", "SMPL"};
         cache->title_cache = row;
-        paint_fill(0, 32, 240, 13, BACK);
-        text(8, 35, "T", 1, colors[track], BACK);
-        number(14, 35, track + 1, 1, 1, colors[track], BACK);
-        text(30, 35, source[groove_source_type(track)], 1, TEXT, BACK);
-        text(64, 35, m->title, 1, colors[track], BACK);
-        number(206, 35, m->index, 1, 1, TEXT, BACK);
-        text(212, 35, "/3", 1, DIM, BACK);
+        fillb(0, 32, 240, 13);
+        track_tag(source[groove_source_type(track)]);
+        textb(64, 35, m->title, 1, colors[track]);
+        numberb(206, 35, m->index, 1, 1, TEXT);
+        textb(212, 35, "/3", 1, DIM);
     }
     if (cache->middle_cache != sig) {
         cache->middle_cache = sig;
-        paint_fill(0, 46, 240, 148, BACK);
-        text(8, 46, m->sub, strlen(m->sub) <= MAQAM_SUB_BIG ? 2 : 1, m->custom ? AMBER : TEXT, BACK);
-        text(8, 66, m->status, 1, colors[track], BACK);
-        text(8, 78, m->note, 1, DIM, BACK);
+        fillb(0, 46, 240, 148);
+        textb(8, 46, m->sub, strlen(m->sub) <= MAQAM_SUB_BIG ? 2 : 1, m->custom ? AMBER : TEXT);
+        textb(8, 66, m->status, 1, colors[track]);
+        textb(8, 78, m->note, 1, DIM);
         unsigned cells = m->ncell ? m->ncell : 12, w = cells > 9 ? 19 : 228 / cells; /* degree row: 5-9 cells fit 240 px */
         unsigned cents = 0;                      /* an all-zero row (WEST) shows no cents */
         for (unsigned i = 0; i < cells; ++i) cents |= m->cents[i] != 0;
@@ -1443,26 +1454,23 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
                 int c = m->cents[i];
                 char out[12];
                 unsigned n = maqam_num(out, c, c > 0);
-                text((unsigned)((int)x + ((int)w - 6 * (int)n) / 2), 117 + (cells > 9 ? 9 * (i & 1U) : 0), out, 1, c ? TEXT : DIM, BACK); /* 12 cells: staggered, -127 is wider than its key */
+                textb((unsigned)((int)x + ((int)w - 6 * (int)n) / 2), 117 + (cells > 9 ? 9 * (i & 1U) : 0), out, 1, c ? TEXT : DIM); /* 12 cells: staggered, -127 is wider than its key */
             }
         }
         for (unsigned i = 0; i < 2; ++i)          /* TRACK page: the alt and main readouts */
-            text(8, drop + (i ? 164U : 134U), m->line[i], 2 - i, i ? DIM : TEXT, BACK);
-        if (m->warn[0]) text(8, 182, m->warn, 1, AMBER, BACK);
+            textb(8, drop + (i ? 164U : 134U), m->line[i], 2 - i, i ? DIM : TEXT);
+        if (m->warn[0]) textb(8, 182, m->warn, 1, AMBER);
     }
     for (unsigned i = 0; i < 4; ++i)
         if (m->knob[i][0]) {                     /* values cut to 4 characters: always the large font */
-            char value[5];
-            unsigned n = (unsigned)strlen(m->knob[i][1]);
-            n = n > 4 ? 4 : n;
-            memcpy(value, m->knob[i][1], n);
-            value[n] = 0;
+            char value[5] = {0};
+            strncpy(value, m->knob[i][1], 4);
             knob(i, m->knob[i][0], value, colors[i]);
         }
-        else if (cache->foot_cache[i] != 1U) { cache->foot_cache[i] = 1U; paint_fill(6 + 59 * i, 195, 54, 32, BACK); }
+        else if (cache->foot_cache[i] != 1U) { cache->foot_cache[i] = 1U; fillb(6 + 59 * i, 195, 54, 32); }
     if (cache->hint_cache != 1U) {
         cache->hint_cache = 1U;
-        text(6, 231, "SCL PAGE  SELECT TRACK  HOME BACK", 1, DIM, BACK);
+        textb(6, 231, "SCL PAGE  SELECT TRACK  HOME BACK", 1, DIM);
     }
 }
 static void draw_page_body(const struct fm1_ble_status *ble)
@@ -1470,7 +1478,7 @@ static void draw_page_body(const struct fm1_ble_status *ble)
     unsigned visible = boot_active ? STARTUP : glo_down && glo_used ? MIX : page;
     if (visible != cache->shown_page) {
         cache->shown_page = visible;
-        paint_fill(0, 0, 240, 240, BACK);
+        fillb(0, 0, 240, 240);
         if (visible != STARTUP) paint_fill(0, 29, 240, 1, PANEL);
         cache->header_cache = cache->tag_cache = cache->title_cache = cache->middle_cache = cache->hint_cache = cache->hold_cache = cache->seq_cache = ~0U;
         memset(cache->foot_cache, 0xff, sizeof cache->foot_cache);
@@ -1479,7 +1487,7 @@ static void draw_page_body(const struct fm1_ble_status *ble)
         memset(cache->tile_cache, 0xff, sizeof cache->tile_cache);
         memset(cache->meter_cache, 0xff, sizeof cache->meter_cache);
         if (visible == PROJECT || visible == PRESET_BROWSER)
-            text(8, 8, visible == PROJECT ? "SAVE PROJECT" : "PRESETS", 2, ACCENT, BACK);
+            textb(8, 8, visible == PROJECT ? "SAVE PROJECT" : "PRESETS", 2, ACCENT);
     }
     if (visible == STARTUP) { boot_draw(); return; }
     const struct groove_view *views = frame_views, *v = &views[track];
@@ -1516,7 +1524,7 @@ static void draw_page_body(const struct fm1_ble_status *ble)
         effects_draw();
         if (cache->hint_cache != 1U) {
             cache->hint_cache = 1U;
-            text(8, 231, "SELECT TRACK  PRESETS PAGE", 1, DIM, BACK);
+            textb(8, 231, "SELECT TRACK  PRESETS PAGE", 1, DIM);
         }
         return;
     }
@@ -1542,9 +1550,9 @@ static void draw_page_body(const struct fm1_ble_status *ble)
         uint32_t strip = parameter | (seq_page << 10) | ((unsigned)v->type << 13);
         if (cache->seq_cache != strip) {
             cache->seq_cache = strip;
-            paint_fill(0, 184, 240, 11, BACK);
-            text(8, 186, parameter ? groove_lock_parameter_name(track, parameter - 1) : seq_pages[seq_page], 1, ACCENT, BACK);
-            if (!parameter) text(174, 186, "ALGO PAGE", 1, DIM, BACK);
+            fillb(0, 184, 240, 11);
+            textb(8, 186, parameter ? groove_lock_parameter_name(track, parameter - 1) : seq_pages[seq_page], 1, ACCENT);
+            if (!parameter) textb(174, 186, "ALGO PAGE", 1, DIM);
         }
     }
     for (unsigned col = 0; col < 4; ++col) {
@@ -1686,8 +1694,8 @@ static void draw_page_body(const struct fm1_ble_status *ble)
     uint32_t hint_sig = signature(0, hint, (unsigned)strlen(hint));
     if (hint_sig != cache->hint_cache) {
         cache->hint_cache = hint_sig;
-        paint_fill(6, 231, 228, 7, BACK);
-        text(6, 231, hint, 1, DIM, BACK);
+        fillb(6, 231, 228, 7);
+        textb(6, 231, hint, 1, DIM);
     }
 }
 static void draw_page(const struct fm1_ble_status *ble)
@@ -1704,7 +1712,7 @@ static void draw_page(const struct fm1_ble_status *ble)
     unsigned width = active ? (unsigned)clamp((int)(frame_time - since), 0, 600) * 224U / 600U : 0;
     if (cache->hold_cache == width) return;
     cache->hold_cache = width;
-    paint_fill(8, 27, 224, 2, BACK);
+    fillb(8, 27, 224, 2);
     if (width) paint_fill(8, 27, width, 2, ACCENT);
 }
 static void draw(const struct fm1_ble_status *ble)
@@ -3141,7 +3149,7 @@ static void algorithm_draw(unsigned algorithm, unsigned muted)
         }
     }
     line((int)left, 169, (int)right, 169, DIM);
-    text(104, 172, "OUT", 1, DIM, BACK);
+    textb(104, 172, "OUT", 1, DIM);
     for (unsigned i = 0; i < 6; ++i) {
         unsigned x = 8 + (layout[i * 2] >> 4) * 36, y = 151 - (layout[i * 2] & 15) * 15;
         uint16_t bg = muted & (1U << i) ? PANEL : i == op ? colors[track] : DIM;
