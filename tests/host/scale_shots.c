@@ -36,7 +36,7 @@ static void snap(const char *name)
 int main(void)
 {
     mkdir("build/host/shots", 0755);
-    /* degree rows on the PROJECT page */
+    /* degree rows on the SCALE page */
     project("RAST", 0, 1);   snap("01_rast_c_trad_up_down");
     project("RAST", 0, 0);   snap("02_rast_c_equal");
     project("HIJAZ", 4, 1);  snap("03_hijaz_d_flats_sharps");
@@ -57,35 +57,48 @@ int main(void)
     project("J.DRB", 0, 0);  snap("13_jins_darbari");
     project("T.RST", 14, 1); snap("14_turkish_rast_on_g");
 
-    /* TRACK page: an override, and a CUSTOM table */
+    /* SCALE page of a track with its own scale, CUSTOM, and drums */
     project("RAST", 0, 1);
     enc(1, 1); ms(100);                              /* ALGO: TRACK page */
+    enc(2, 1); ms(100);                              /* SCOPE: OWN */
+    enc(1, -1); ms(100);                             /* ALGO: SCALE page */
     maqam_set_override(0, find("BAYAT"), 4); ms(300);
-    snap("15_track_override_bayati_d");
+    snap("15_scale_own_bayati_d");
+    enc(0, 7); ms(300);
+    snap("16_scale_drums");
+    enc(0, -7);
+
+    /* TRACK page: following, own with its own layout, CUSTOM, drums */
+    project("BAYAT", 4, 1);
+    enc(1, 1); ms(300);
+    snap("17_track_follow");
+    enc(2, 1); enc(3, 1); ms(300);
+    snap("18_track_own_white");
     {
         struct groove_tuning t;
-        groove_tuning_get(0, &t);
+        groove_tuning_get(1, &t);
         int8_t *main_table = (int8_t *)&t;          /* `main` is the first member; the macro above renames it */
         main_table[1] = 17; main_table[2] = -3;
-        groove_tuning_set(0, &t);
-        maqam_refresh(); ms(300);
-        snap("16_track_custom_table");
+        groove_tuning_set(1, &t);
+        maqam_refresh();
+        enc(0, 1); ms(300);
+        snap("19_track_custom_table");
+        enc(1, 1); ms(300);
+        snap("20_scale_custom_table");
     }
+    project("RAST", 0, 1);
+    enc(0, 7); enc(1, 1); ms(300);
+    snap("21_track_drums");
 
-    /* KEYS page */
+    /* TRACK page: extremes on adjacent keys and an out-of-scale flat */
     project("BAYAT", 4, 1);
-    enc(1, 2); ms(200);
-    snap("17_keys_layouts");
-
-    /* ALT page: extremes on adjacent keys and an out-of-scale flat */
-    project("BAYAT", 4, 1);
-    enc(1, 3); ms(100);
+    enc(1, 1); ms(100);
     maqam_set_alt(0, 4, -100);                       /* E key: Eb */
     maqam_set_alt(0, 5, 127);
     maqam_set_alt(0, 6, -127);
     maqam_set_alt(0, 10, 50);                        /* A# key (Bb): B half-flat */
     ms(300);
-    snap("18_alt_bayati_extremes");
+    snap("22_track_alt_bayati_extremes");
 
     /* the sample-bank warning on the scale page */
     sim_boot(1);
@@ -103,19 +116,19 @@ int main(void)
     open_scale(); ms(300);
     btn(SAVE); btn(SAVE); ms(300);                   /* refused: non-zero tuning + over-size bank */
     btn(HOME); open_scale(); ms(400);
-    snap("19_reduce_sample_bank");
+    snap("23_reduce_sample_bank");
     /* the scale tag in the header of the overview page */
     sim_boot(1);
     maqam_init();
     ms(50);
     maqam_set_project(find("RAST"), 7);
     ms(400);
-    snap("20_overview_tag_rast");
+    snap("24_overview_tag_rast");
     /* the stock DX7 scaling screens, the frame the scale pages follow (HOME+SCL, then SCL) */
     sim_boot(1); maqam_init(); ms(50);
     hold_home_scl(); ms(400);
-    snap("21_dx7_scaling_stock");
+    snap("25_dx7_scaling_stock");
     btn(SCL); ms(400);
-    snap("22_dx7_curves_stock");
+    snap("26_dx7_curves_stock");
     return failures != 0;
 }

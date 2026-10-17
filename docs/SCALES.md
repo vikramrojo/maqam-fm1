@@ -24,9 +24,9 @@ Panel words: **SELECT** is the first encoder (track), **ALGO** the second (page)
 ### The alt table
 
 A semitone degree and a quarter-tone degree compete for the same key (E half-flat and E-flat both live near the E key), so each key has a second pitch:
-- **Default alt table**: a **WEST** scale gets an all-zero alt table (a WEST project has all-zero tables; quarter tones are one edit away on the ALT page). For every other set: a key carrying a quarter-tone degree gets 0 (plain 12-TET: E-half-flat's alt is E); a key carrying a semitone degree gets -50 (its half-flat); keys with no degree get 0. Rast on C: alt 0 on E and B, -50 on C, D, F, G, A, A#.
+- **Default alt table**: a **WEST** scale gets an all-zero alt table (a WEST project has all-zero tables; quarter tones are one edit away on the TRACK page). For every other set: a key carrying a quarter-tone degree gets 0 (plain 12-TET: E-half-flat's alt is E); a key carrying a semitone degree gets -50 (its half-flat); keys with no degree get 0. Rast on C: alt 0 on E and B, -50 on C, D, F, G, A, A#.
 - A **scale or root change resets** the track's alt table to these defaults. Edits survive everything else (intonation, saving, loading).
-- Each entry is editable from -127 to +127 cents on the ALT page (section 4).
+- Each entry is editable from -127 to +127 cents on the TRACK page (section 4).
 
 ---
 
@@ -34,7 +34,7 @@ A semitone degree and a quarter-tone degree compete for the same key (E half-fla
 
 ### Key layouts
 
-The layout says what the 27 keys do on a tuned track. Set it on the KEYS page (section 4): a project default (saved with the project) and a per-track override (not saved).
+The layout says what the 27 keys do on a tuned track. Set it with K2 on the TRACK page (section 4): the project default (saved with the project) when the track follows the project, or the track's own layout (not saved) when it has its own scale. A track that follows always plays the project layout.
 
 - **SNAP** (default): every key plays. Each key plays its own pitch class if the scale has a degree there; otherwise it plays the next scale note **above** when you are going up and **below** when going down. In C major, C# plays D going up and C going down.
 - **WHITE**: the white keys walk the scale's notes in order, starting at C4 = the root note, and the black keys are silent. A seven-note maqam fits in the seven white keys of an octave, so this is the easiest way to play any maqam. The layout comes from the form of the scale with more notes, so it does not shift with the direction.
@@ -87,60 +87,50 @@ Spelling is computed from the scale and root every time; nothing is stored. Of t
 
 ## 4. The scale pages
 
-Open them with **SCL**: they come up on the page you used last. **SCL** again moves to the next page (1/4, 2/4, 3/4, 4/4, then 1/4 again; **ALGO** does the same, both ways). The SCL button lights while you are there. **HOME** leaves, as on every page; **SAVE** opens the project page and returns here after a good save. The stock FM scaling screens (DX7 level and rate scaling, or the pitch page on other engines) are on **HOME + SCL** (hold HOME, press SCL): on that screen SCL keeps toggling level and rate as in stock, and HOME + SCL again goes back to the scale pages. The **keys play** on every scale page as on the main pages; on the ALT page a key also selects that key for editing. The root is set only with K1.
+Open them with **SCL**: they come up on the page you used last. There are two pages, **SCALE** (1/2) and **TRACK** (2/2). **SCL** again switches to the other one; **ALGO** does the same, both ways (`pages_test` "navigation"). The SCL button lights while you are there. **HOME** leaves, as on every page; **SAVE** opens the project page and returns here after a good save. The stock FM scaling screens (DX7 level and rate scaling, or the pitch page on other engines) are on **HOME + SCL** (hold HOME, press SCL): on that screen SCL keeps toggling level and rate as in stock, and HOME + SCL again goes back to the scale pages on the page you used last. The **keys play** on both pages as on the main pages; on the TRACK page a key also selects that key for alt editing. The root is set only with K1 on the SCALE page.
 
-The pages use the same frame as the DX7 edit pages: the stock header (tempo, transport, mode) stays, and a small row under it reads `T1 DX7  PROJECT  1/4` (track, source, page name, position). The hint row reads `SCL PAGE  SELECT TRACK  HOME BACK`. Changing page redraws only the page name, the position, the content and the knobs (`pages_test` "frame").
+The pages use the same frame as the DX7 edit pages: the stock header (tempo, transport, mode) stays, and a small row under it reads `T1 DX7  SCALE  1/2` or `T1 DX7  TRACK  2/2` (track, source, page name, position). The hint row reads `SCL PAGE  SELECT TRACK  HOME BACK`. Changing page redraws only the page name, the position, the content and the knobs (`pages_test` "frame").
 
-**SELECT** picks the track, **ALGO** moves between the four pages like SCL. Under the section row every page shows the subtitle, for the project (page 1) or the selected track (pages 2-4):
+**Scope.** Each melodic track either **follows the project** scale or has **its own** scale. Edits go to the scope of the selected track: on a track that follows, root, set, scale and the key layout edit the project's (so every following track changes); on a track with its own scale they edit only that track. **Tuning** (EQUAL/TRAD) is always the project's. **SELECT** picks the track.
+
+Under the section row both pages show the subtitle of the selected track:
 
 `Ed arab sikah^ trad` (`pages_test` "subtitle after K1/K2/K3") = root Ed (E half-flat), set ARAB, scale Sikah, TRAD.
 
 - The arrow after the scale name (up or down, as the last key of the track went) shows **only for scales whose two forms differ**. Scales with one form (Major, Bilawal ...) show none.
-- The line under it says whether the track **FOLLOWS PROJECT**, has an **OVERRIDE**, or has a **CUSTOM TABLE**, and for drum tracks **DRUMS - NOT TUNED**.
+- The line under it says `TRACK 1  FOLLOWS PROJECT`, `TRACK 1  OWN SCALE`, `TRACK 1  CUSTOM TABLE`, or for drum tracks `TRACK 8  DRUMS - NOT TUNED`.
 - The **home hint** `home: Ed` shows the scale's traditional tonic for non-Western scales. It is a hint only: choosing a scale never moves the root. To play Sikah at home, set the root to E half-flat with K1.
-- **Pages 1 and 2 show a degree row**: only the scale's degrees (both forms together), in pitch order from the root, each cell with its spelled name and, under it, its cents from the nearest quarter tone (24-TET); a row of all zeros (WEST, EQUAL) shows no cents. Green frame = the root. A degree of one form only is marked: `^` ascending only, `v` descending only. Keys that carry no degree do not appear. Bayati on D, TRAD: seven cells `D Ed F G A Bb C` with `0 +3 -6 -2 +2 +16 -4` (Ed is 47 c below E, 3 c above E half-flat) (`pages_test` "Bayati on D", "Bayati row cents"). Rast on C: `C D Ed F G A Bb Bd`, `Bb` marked down (descending only) and `Bd` marked up (ascending only) (`pages_test` "Rast on C"). Every scale gives one cell per degree (5 to 9; 12 for WEST chromatic) (`pages_test` "degree row: one cell per degree"). A CUSTOM track has no degrees and keeps the 12-key strip.
-- Page 3 (KEYS) and page 4 (ALT) keep the strip of all 12 keys: coloured = carries a degree, green frame = root.
 - If the last project save was refused because a sample bank leaves no room for the tuning tables, the pages show **SAVE FAILED: REDUCE SAMPLE BANK** (section 6).
 
-### Page 1/4: PROJECT
+### Page 1/2: SCALE
 
 | Control | Does |
 |---|---|
-| **K1 ROOT** | the project root, a quarter tone per click (24 positions, wraps) |
+| **K1 ROOT** | the root, a quarter tone per click (24 positions, wraps) |
 | **K2 SET** | WEST, TURK, ARAB, INDIA, PSYCH, JINS (jumps to that set's first scale) |
 | **K3 SCALE** | the scale within the set (wraps) |
-| **K4 TUNING** | right = TRAD, left = EQUAL |
+| **K4 TUNING** | right = TRAD, left = EQUAL (always the project's) |
 
-Every melodic track follows these unless it overrides.
+K1-K3 edit the project when the selected track follows it and only that track when it has its own scale (`pages_test` "scopes"). Drum tracks are not tuned: on them the knobs edit the project.
 
-### Page 2/4: TRACK
+The page shows a **degree row**: only the scale's degrees (both forms together), in pitch order from the root, each cell with its spelled name and, under it, its cents from the nearest quarter tone (24-TET); a row of all zeros (WEST, EQUAL) shows no cents. Green frame = the root. A degree of one form only is marked: `^` ascending only, `v` descending only. Keys that carry no degree do not appear. Bayati on D, TRAD: seven cells `D Ed F G A Bb C` with `0 +3 -6 -2 +2 +16 -4` (Ed is 47 c below E, 3 c above E half-flat) (`pages_test` "Bayati on D", "Bayati row cents"). Rast on C: `C D Ed F G A Bb Bd`, `Bb` marked down (descending only) and `Bd` marked up (ascending only) (`pages_test` "Rast on C"). Every scale gives one cell per degree (5 to 9; 12 for WEST chromatic) (`pages_test` "degree row: one cell per degree"). A CUSTOM track has no degrees and keeps the 12-key strip.
 
-| Control | Does |
-|---|---|
-| **K1 OVERRIDE** | right = this track gets its own root and scale (starting from the project's); left = it follows the project again |
-| **K2 ROOT**, **K3 SET**, **K4 SCALE** | edit the track's root, set and scale (turning any of them switches the override on) |
+**CUSTOM**: a track whose table matches no scale (edited by hand, or by another tool) shows `custom` and `--` on the root and set knobs; its table is kept exactly as it is. It counts as having its own table, so turning K1-K3 replaces it with a scale (only that track), and FOLLOW on the TRACK page replaces it with the project's scale (`pages_test` "custom and drums").
 
-A track always uses the project's intonation. Two maqamat at once: set the project to Rast on C, then override track 2 with Bayati on D.
-
-**CUSTOM**: a track whose table matches no scale (edited by hand, or by another tool) shows `custom`; its table is kept exactly as it is. K1 left on this page replaces it with the project's scale.
-
-### Page 3/4: KEYS
+### Page 2/2: TRACK
 
 | Control | Does |
 |---|---|
-| **K1 PROJECT** | the project default layout: SNAP, WHITE, CHROM |
-| **K2 TRACK** | this track's layout: FOLLOW (the project's), SNAP, WHITE, CHROM |
+| **K1 SCOPE** | FOLLOW or OWN. Right = this track gets its own scale, starting as a copy of the project's scale, root and key layout; left = it follows the project again (and uses the project layout) |
+| **K2 KEYS** | the key layout: SNAP, WHITE, CHROM. The project's layout when the track follows, the track's own when it is OWN |
+| **K3 ALT KEY** | which pitch class's alt entry to edit (highlighted in the strip; pressing a panel key does the same) |
+| **K4 ALT** | the entry's cents, +/-1 per click, from -127 to +127 |
 
-### Page 4/4: ALT table editor
+Two maqamat at once: set the project to Rast on C, then on track 2 turn K1 to OWN and, on the SCALE page, choose Bayati on D (`pages_test` "scopes"). The own layout is not saved (section 6); knob values are cut to four characters, so FOLLOW reads `FOLL` and WHITE `WHIT`, always in the large font.
 
-| Control | Does |
-|---|---|
-| **a key** or **K1 KEY** | picks which pitch class's alt entry to edit (highlighted in the strip) |
-| **K2** | the entry's cents, +/-1 per click, from -127 to +127 |
-| **K3** | the same, +/-10 per click |
-| **K4 RESET** | turn it: the track's alt table goes back to the scale's defaults |
+The strip keeps all 12 keys, because an alt pitch can be set on any key: each shows its alt cents from the nearest quarter tone; keys that carry a degree show the degree's spelled name, the others are dimmed with their fixed name. On Bayati on D the A# key reads `Bb` and C#, D#, F#, G# are dimmed (`pages_test` "alt strip: A# key is labelled Bb", C# D# F# G# dimmed). The ALT knob shows the entry's raw value (-127..+127 from the 12-TET key). The large line shows the resulting pitch: its cents from the nearest quarter tone and its name at octave 4, spelled as for notes (alt E at -100 on Rast on C: `ALT 0 Eb4`), and the line under it the main entry the same way. Edits are kept until the scale or root of that track next changes, and are saved with the project (`pages_test` "alt").
 
-The strip keeps all 12 keys, because an alt pitch can be set on any key: keys that carry a degree show the degree's spelled name, the others are dimmed with their fixed name. On Bayati on D the A# key reads `Bb` and C#, D#, F#, G# are dimmed (`pages_test` "alt strip: A# key is labelled Bb", C# D# F# G# dimmed). The knobs show the entry's raw value (-127..+127 from the 12-TET key). The large line shows the resulting pitch: its cents from the nearest quarter tone and its name at octave 4, spelled as for notes (alt E at -100 on Rast on C: `ALT 0 Eb4`), and the line under it the main entry the same way. Knob values are cut to four characters (`BAYA`), always in the large font. Edits are kept until the scale or root of that track next changes, and are saved with the project.
+The layout scenarios are in `pages_test` "layouts" and `keys_test` ("a track with its own scale has its own layout").
 
 ---
 
@@ -150,12 +140,12 @@ On the overview and step pages the header shows the selected track's scale at th
 
 ## 5. Recipes
 
-- **Play a maqam in two moves.** SCL, K2 to ARAB, K3 to the maqam, K1 to the root (audition with the keys); ALGO twice to KEYS, K1 to WHITE; HOME; play the white keys up and down.
-- **Hear the traditional tuning.** Hold a note on a Rast track and turn K4 on page 1 back and forth: the pitch moves by a few cents.
+- **Play a maqam in two moves.** SCL, K2 to ARAB, K3 to the maqam, K1 to the root (audition with the keys); SCL for the TRACK page, K2 to WHITE; HOME; play the white keys up and down.
+- **Hear the traditional tuning.** Hold a note on a Rast track and turn K4 on the SCALE page back and forth: the pitch moves by a few cents.
 - **One quarter tone anywhere.** Hold OCT- (or OCT+) and press a key to get the alt pitch; with Rast alt E is plain E.
 - **Record an alt note.** REC, hold OCT-, press the key: the step shows `E4.`.
-- **Two maqamat.** See page 2.
-- **Fine-tune an alt entry.** Page 4, press the key, K2 / K3.
+- **Two maqamat.** Turn K1 on the TRACK page to OWN, then choose its scale on the SCALE page.
+- **Fine-tune an alt entry.** TRACK page, press the key, K4.
 
 ---
 
@@ -165,7 +155,7 @@ On the overview and step pages the header shows the selected track's scale at th
 - A track's own scale and root are recovered from its saved table by matching it against the library at the project intonation (first match wins). A table with no match loads as CUSTOM and is never changed.
 - A stock project without a trailer loads as WEST / C / TRAD; if it carries tables, they are kept and each track's scale is derived or shown as CUSTOM.
 - **REDUCE SAMPLE BANK**: V13 keeps the tuning tables in the last flash sector, which an old, very large stored sample bank can overlap. Saving non-zero tuning then fails (the project page says `REDUCE SAMPLE BANK`, and the scale pages repeat it); saving a project with all-zero tables still works. Remove samples to make room. A project that only uses WEST scales has all-zero tables, so it always saves; non-WEST scales (and edited alt entries) make the tables non-zero.
-- The per-track key layout is not saved; the project default is.
+- A track's own key layout is not saved (after loading it uses the project's layout); the project default layout is.
 
 ---
 

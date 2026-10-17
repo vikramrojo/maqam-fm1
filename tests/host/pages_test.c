@@ -33,12 +33,14 @@ static void btn(unsigned b) { sim_control(0, b, 1); ms(30); sim_control(0, b, 0)
 static void key(unsigned k) { sim_control(1, k, 1); ms(30); sim_control(1, k, 0); ms(30); }
 static void enc(unsigned i, int v) { sim_control(2, i, v); ms(30); }
 static unsigned sub_of(void) { struct maqam_view v; maqam_page_view(0, &v); return (unsigned)v.index - 1; }
-/* SCL opens the page on the last subpage; the tests then step to the PROJECT subpage (1/4). */
+/* SCL opens the page on the last subpage; the tests then step to the SCALE subpage (1/2). */
 static void open_scale(void)
 {
     btn(SCL);
-    for (unsigned i = 0; i < 4 && sub_of(); ++i) btn(SCL);
+    for (unsigned i = 0; i < 2 && sub_of(); ++i) btn(SCL);
 }
+static void open_track(void) { open_scale(); btn(SCL); }
+static void sel_track(unsigned t) { enc(0, (int)t - (int)sim_state()[0]); }
 static void boot(void)
 {
     sim_boot(1);
@@ -165,22 +167,20 @@ static void navigation(void)
     maqam_init();
     ms(50);
     CHECK(page() == PAGE_OVERVIEW);
-    btn(SCL);                                    /* SCL opens the scale pages on the last subpage (first: PROJECT) */
+    btn(SCL);                                    /* SCL opens the scale pages on the last subpage (first: SCALE) */
     CHECK(page() == PAGE_SCALE && sub_of() == 0);
-    btn(SCL); CHECK(page() == PAGE_SCALE && sub_of() == 1);        /* and cycles TRACK, KEYS, ALT, PROJECT */
-    btn(SCL); CHECK(sub_of() == 2);
-    btn(SCL); CHECK(sub_of() == 3);
-    btn(SCL); CHECK(sub_of() == 0 && page() == PAGE_SCALE);
-    printf("%-52s ok\n", "SCL opens, then cycles 1/4 2/4 3/4 4/4 1/4");
-    enc(1, -1); CHECK(sub_of() == 3);            /* ALGORITHM wraps both ways */
+    btn(SCL); CHECK(page() == PAGE_SCALE && sub_of() == 1);        /* and switches to TRACK */
+    btn(SCL); CHECK(sub_of() == 0 && page() == PAGE_SCALE);        /* and back to SCALE */
+    printf("%-52s ok\n", "SCL opens, then switches 1/2 2/2 1/2");
+    enc(1, -1); CHECK(sub_of() == 1);            /* ALGORITHM wraps both ways */
     enc(1, 1); CHECK(sub_of() == 0);
-    enc(1, 2);                                   /* leave on KEYS */
+    enc(1, 1);                                   /* leave on TRACK */
     btn(HOME);                                   /* HOME leaves */
     CHECK(page() == PAGE_OVERVIEW);
     btn(SCL);                                    /* ... and SCL returns to the last subpage */
-    CHECK(page() == PAGE_SCALE && sub_of() == 2);
+    CHECK(page() == PAGE_SCALE && sub_of() == 1);
     maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "KEYS"));
+    CHECK(!strcmp(v.title, "TRACK") && v.index == 2);
     /* HOME+SCL from a scale page: the stock SCL screen (DX7 level scaling) with the stock SCL toggle */
     hold_home_scl();
     CHECK(page() == 2 /* FM_EDIT */ && sim_state()[6] == 4);
@@ -188,7 +188,7 @@ static void navigation(void)
     btn(SCL); CHECK(page() == 2 && sim_state()[6] == 4);           /* and back */
     /* HOME+SCL from the stock screen: the scale pages on the last subpage */
     hold_home_scl();
-    CHECK(page() == PAGE_SCALE && sub_of() == 2);
+    CHECK(page() == PAGE_SCALE && sub_of() == 1);
     /* the stock toggle still works after the round trip */
     hold_home_scl(); btn(SCL);
     CHECK(page() == 2 && sim_state()[6] == 5);
@@ -223,7 +223,7 @@ static void frame_cycling(void)
     ms(300);
     unsigned head = hash_rect(0, 0, 240, 32), hint = hash_rect(0, 229, 240, 11), row = hash_rect(0, 33, 240, 11);
     CHECK(ink(0, 0, 240, 29) > 200 && ink(8, 35, 230, 7) > 50 && ink(6, 231, 228, 7) > 100);
-    for (unsigned i = 1; i < 4; ++i) {
+    for (unsigned i = 1; i < 2; ++i) {
         btn(SCL); ms(300);
         CHECK(sub_of() == i);
         CHECK(hash_rect(0, 0, 240, 32) == head);            /* header: tempo, transport, mode box */
@@ -231,7 +231,7 @@ static void frame_cycling(void)
         CHECK(hash_rect(0, 33, 240, 11) != row);             /* section word and counter changed */
         row = hash_rect(0, 33, 240, 11);
     }
-    shot("scale_frame_alt");
+    shot("scale_frame_track");
     btn(SCL); ms(300);
     CHECK(sub_of() == 0 && hash_rect(0, 0, 240, 32) == head);
     printf("frame: header and hint unchanged across SCL cycling, the section row changes\n");
@@ -282,13 +282,13 @@ static void header_tag(void)
     printf("header tag: Ed RAST, hidden for CHR and drums, SIKA cut, CUST, repaints on change\n");
 }
 
-static void project_page(void)
+static void scale_page(void)
 {
     boot();
     CHECK(page() == PAGE_SCALE);
     struct maqam_view v;
     maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "PROJECT"));
+    CHECK(!strcmp(v.title, "SCALE") && v.index == 1);
     has("default subtitle", v.sub, "C west chromat trad");
     CHECK(maqam_project_scale() == 0 && maqam_project_root() == 0 && maqam_trad() == 1);
     unsigned sikah = find("SIKAH"), set = SCALES[sikah].set, first = 0;
@@ -338,10 +338,9 @@ static void project_page(void)
         sim_control(0, OCT_DN, 1); ms(30); key(11); sim_control(0, OCT_DN, 0); ms(30);
         sim_control(0, OCT_UP, 1); ms(30); key(11); sim_control(0, OCT_UP, 0); ms(30);
         CHECK(maqam_project_root() == root && page() == PAGE_SCALE);
-        play_check(9, 62, "PROJECT page: D key sounds (step records D4)");   /* the page was left by HOME */
+        play_check(9, 62, "SCALE page: D key sounds (step records D4)");   /* the page was left by HOME */
         CHECK(maqam_project_root() == root);
-        btn(SCL);
-        for (unsigned i = 0; i < 4 && sub_of(); ++i) btn(SCL);
+        open_scale();
     }
     /* root wraps */
     {
@@ -349,44 +348,72 @@ static void project_page(void)
         enc(2, 20);
         CHECK(maqam_project_root() == (root + 20) % 24);
     }
-    printf("project page: K1 root, K2 set, K3 scale, K4 tuning, keys play and leave the root alone\n");
+    printf("scale page: K1 root, K2 set, K3 scale, K4 tuning, keys play and leave the root alone\n");
 }
 
-static void track_page(void)
+/* "Two scope-aware scale pages": edits apply to the scope of the selected track. */
+static void scopes(void)
 {
     boot();
     unsigned rast = find("RAST"), bayat = find("BAYAT");
+    struct maqam_view v;
+    maqam_set_project(rast, 0);
+    maqam_page_view(0, &v);
+    has("status: follows", v.status, "TRACK 1  FOLLOWS PROJECT");
+    /* editing a following track edits the project */
+    enc(4, (int)(bayat - rast));                 /* K3 SCALE: Rast -> Bayati (same set) */
+    CHECK(maqam_project_scale() == bayat && !maqam_overridden(0));
+    expect_main(0, bayat, 0, 1, "following track 1: scale change edits the project");
+    expect_main(2, bayat, 0, 1, "  and track 3 follows");
+    expect_main(6, bayat, 0, 1, "  and track 7 follows");
+    enc(2, 4);                                   /* K1 ROOT */
+    CHECK(maqam_project_root() == 4);
+    expect_main(1, bayat, 4, 1, "  root edits the project too");
+    /* OWN on track 2: its scale changes alone */
+    sel_track(1);
+    btn(SCL);
+    maqam_page_view(1, &v);
+    CHECK(!strcmp(v.title, "TRACK"));
+    has("scope knob: FOLLOW", v.knob[0][1], "FOLLOW");
+    enc(2, 1);                                   /* K1 SCOPE -> OWN: copies the project scale and root */
+    CHECK(maqam_overridden(1) && maqam_track_scale(1) == bayat && maqam_track_root(1) == 4);
+    maqam_page_view(1, &v);
+    has("scope knob: OWN", v.knob[0][1], "OWN");
+    has("status: own scale", v.status, "TRACK 2  OWN SCALE");
+    btn(SCL);
+    enc(4, (int)rast - (int)bayat);              /* K3 SCALE on the SCALE page: only track 2 */
+    CHECK(maqam_track_scale(1) == rast && maqam_track_root(1) == 4);
+    CHECK(maqam_project_scale() == bayat && maqam_project_root() == 4);
+    expect_main(1, rast, 4, 1, "OWN: track 2 = Rast on D");
+    expect_main(0, bayat, 4, 1, "  track 1 keeps the project Bayati on D");
+    expect_main(2, bayat, 4, 1, "  track 3 too");
+    enc(2, 3);                                   /* K1 ROOT edits the track only */
+    CHECK(maqam_track_root(1) == 7 && maqam_project_root() == 4);
+    enc(5, -1);                                  /* K4 TUNING is always the project's */
+    CHECK(maqam_trad() == 0);
+    expect_main(1, rast, 7, 0, "  tuning is the project's: track 2 follows EQUAL");
+    expect_main(0, bayat, 4, 0, "  and so does track 1");
+    enc(5, 1);
+    maqam_page_view(1, &v);
+    has("subtitle of the own scale", v.sub, "E" MAQAM_HF " arab rast");
+    /* back to FOLLOW */
+    btn(SCL);
+    enc(2, -1);
+    CHECK(!maqam_overridden(1) && maqam_track_scale(1) == bayat && maqam_track_root(1) == 4);
+    expect_main(1, bayat, 4, 1, "back to FOLLOW: track 2 takes the project scale");
+    /* keys do not change the root */
+    key(7);
+    CHECK(maqam_project_root() == 4 && !maqam_overridden(1));
+    printf("scopes: edit following = project; OWN edits only the track; FOLLOW restores; tuning is the project's\n");
+}
+
+/* CUSTOM tables are kept and replaced only on request; drums are untouched. */
+static void custom_and_drums(void)
+{
+    boot();
+    unsigned rast = find("RAST");
     maqam_set_project(rast, 0);
     struct maqam_view v;
-    enc(1, 1);                                   /* ALGO: page 2/4 */
-    maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "TRACK"));
-    has("status: follows", v.status, "TRACK 1  FOLLOWS PROJECT");
-    CHECK(!maqam_overridden(0));
-    enc(2, 1);                                   /* K1 OVERRIDE on: copies the project scale */
-    CHECK(maqam_overridden(0) && maqam_track_scale(0) == rast && maqam_track_root(0) == 0);
-    enc(3, 4);                                   /* K2 ROOT: D */
-    CHECK(maqam_track_root(0) == 4);
-    unsigned set = SCALES[bayat].set, first = set ? 0 : 0;
-    while (SCALES[first].set != set) ++first;
-    enc(5, (int)(bayat - rast));                 /* K4 SCALE: Rast -> Bayati (same set) */
-    CHECK(maqam_track_scale(0) == bayat && maqam_track_root(0) == 4);
-    expect_main(0, bayat, 4, 1, "override: track 0 = Bayati on D");
-    expect_main(1, rast, 0, 1, "  track 1 keeps Rast on C");
-    maqam_page_view(0, &v);
-    has("status: override", v.status, "OVERRIDE");
-    has("subtitle", v.sub, "D arab bayati");
-    CHECK(maqam_project_scale() == rast && maqam_project_root() == 0);
-    enc(0, 1);                                   /* SELECT: track 2 */
-    maqam_page_view(1, &v);
-    has("track 2 view", v.status, "TRACK 2  FOLLOWS PROJECT");
-    enc(0, -1);
-    key(7);                                      /* C4 sounds; the track root stays D */
-    CHECK(maqam_track_root(0) == 4 && maqam_overridden(0) && maqam_track_scale(0) == bayat);
-    enc(2, -1);                                  /* K1 OVERRIDE off */
-    CHECK(!maqam_overridden(0));
-    expect_main(0, rast, 0, 1, "override off: back to the project's Rast on C");
-    /* CUSTOM: a hand-edited table is labelled, kept, and replaced only on request */
     struct groove_tuning t;
     tables(0, &t);
     t.main[1] = 17; t.main[2] = -3;
@@ -397,60 +424,82 @@ static void track_page(void)
     maqam_page_view(0, &v);
     has("CUSTOM status", v.status, "CUSTOM TABLE");
     has("CUSTOM subtitle", v.sub, "custom");
-    CHECK(v.custom == 1);
+    has("CUSTOM root knob", v.knob[0][1], "--");
+    has("CUSTOM scale knob", v.knob[2][1], "CUSTOM");
+    CHECK(v.custom == 1 && v.ncell == 0);
     struct groove_tuning after;
     tables(0, &after);
     CHECK(!memcmp(&after, &t, sizeof t));
+    shot("scale_custom");
+    btn(SCL);                                    /* TRACK: reads OWN; the strip shows the keys the table moves */
+    maqam_page_view(0, &v);
+    has("CUSTOM scope knob", v.knob[0][1], "OWN");
+    CHECK(v.ncell == 0 && (v.lit & 6) == 6);
+    tables(0, &after);
+    CHECK(!memcmp(&after, &t, sizeof t));
     shot("scale_track_custom");
-    enc(2, -1);                                  /* K1 left: follow the project again */
+    enc(2, -1);                                  /* K1 FOLLOW: the project tables again */
     CHECK(maqam_track_scale(0) == rast && !maqam_overridden(0));
-    expect_main(0, rast, 0, 1, "CUSTOM -> follow: project tables");
+    expect_main(0, rast, 0, 1, "CUSTOM -> FOLLOW: project tables");
+    /* turning the SCALE knobs of a CUSTOM track replaces its table on request */
+    tables(0, &t);
+    t.main[1] = 17;
+    CHECK(groove_tuning_set(0, &t) == 0);
+    maqam_refresh();
+    CHECK(maqam_track_scale(0) == MAQAM_CUSTOM);
+    btn(SCL);
+    enc(4, 1);
+    CHECK(maqam_track_scale(0) != MAQAM_CUSTOM && maqam_overridden(0));
     /* a drum track is not tuned and nothing changes */
     enc(0, 7);
     CHECK(sim_state()[0] == 7);
+    open_track();
     maqam_page_view(7, &v);
     has("drum track status", v.status, "DRUMS - NOT TUNED");
     CHECK(!v.tuned);
-    enc(2, 1); enc(3, 3);
+    enc(2, 1); enc(4, 3); enc(5, 5);
     CHECK(!maqam_overridden(7));
     tables(7, &after);
     int8_t zero[24] = {0};
     CHECK(!memcmp(&after, zero, sizeof after));
-    printf("track page: K1 override, K2 root, K4 scale, keys leave the root, CUSTOM kept, drums untouched\n");
+    printf("custom and drums: CUSTOM kept, replaced on request, drums untouched\n");
 }
 
-static void keys_page(void)
+/* Layout follows the scope of the selected track. */
+static void layouts(void)
 {
     boot();
     maqam_set_project(find("RAST"), 0);
     struct maqam_view v;
-    enc(1, 2);
+    btn(SCL);
     maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "KEYS"));
-    CHECK(maqam_default_layout() == MAQAM_SNAP && maqam_layout_raw(0) < 0);
-    enc(2, 1);                                   /* K1 project layout: SNAP -> WHITE */
-    CHECK(maqam_default_layout() == MAQAM_WHITE && maqam_layout(0) == MAQAM_WHITE);
-    enc(2, 1);                                   /* -> CHROM */
+    CHECK(maqam_default_layout() == MAQAM_SNAP && maqam_layout_raw(0) == MAQAM_SNAP);
+    has("KEYS knob", v.knob[1][0], "KEYS");
+    enc(3, 1);                                   /* K2 on a following track: the project layout, SNAP -> WHITE */
+    CHECK(maqam_default_layout() == MAQAM_WHITE && maqam_layout(0) == MAQAM_WHITE && maqam_layout(1) == MAQAM_WHITE);
+    enc(3, 5);                                   /* clamps at CHROM */
     CHECK(maqam_default_layout() == MAQAM_CHROM);
-    enc(2, 5);                                   /* clamps at the end */
-    CHECK(maqam_default_layout() == MAQAM_CHROM);
-    enc(2, -9);
-    CHECK(maqam_default_layout() == MAQAM_SNAP);
-    enc(3, 1);                                   /* K2 track layout: FOLLOW -> SNAP */
-    CHECK(maqam_layout_raw(0) == MAQAM_SNAP);
-    enc(3, 1);
-    CHECK(maqam_layout_raw(0) == MAQAM_WHITE && maqam_layout(0) == MAQAM_WHITE);
-    enc(3, 1);
-    CHECK(maqam_layout_raw(0) == MAQAM_CHROM);
+    enc(3, -1);
+    CHECK(maqam_default_layout() == MAQAM_WHITE);
+    maqam_page_view(0, &v);
+    has("layout value", v.knob[1][1], "WHITE");
+    /* track 2 goes OWN: its layout starts as a copy of the project's */
+    sel_track(1);
+    enc(2, 1);
+    CHECK(maqam_overridden(1) && maqam_layout_raw(1) == MAQAM_WHITE);
+    enc(3, 1);                                   /* its own layout only */
+    CHECK(maqam_layout(1) == MAQAM_CHROM && maqam_default_layout() == MAQAM_WHITE && maqam_layout(0) == MAQAM_WHITE);
+    maqam_page_view(1, &v);
+    has("own layout value", v.knob[1][1], "CHROM");
+    sel_track(0);                                /* the project layout changes: the own layout stays */
     enc(3, -9);
-    CHECK(maqam_layout_raw(0) < 0);              /* FOLLOW again */
-    enc(3, 2);
-    CHECK(maqam_layout_raw(0) == MAQAM_WHITE && maqam_layout_raw(1) < 0);
-    maqam_page_view(0, &v);
-    has("knob labels", v.knob[0][0], "PROJECT");
-    has("track layout value", v.knob[1][1], "WHITE");
-    has("effective layout", v.note, "plays: white");
-    printf("keys page: K1 project layout, K2 track layout (FOLLOW/SNAP/WHITE/CHROM)\n");
+    CHECK(maqam_default_layout() == MAQAM_SNAP && maqam_layout(1) == MAQAM_CHROM && maqam_layout(0) == MAQAM_SNAP);
+    sel_track(1);
+    enc(2, -1);                                  /* FOLLOW: the project layout again */
+    CHECK(!maqam_overridden(1) && maqam_layout(1) == MAQAM_SNAP);
+    enc(2, 1);                                   /* OWN again: a fresh copy */
+    CHECK(maqam_layout_raw(1) == MAQAM_SNAP);
+    printf("layouts: K2 edits the project layout when following, the track's own when OWN (copied on OWN)\n");
 }
 
 /* The cents row: every value -127..+127 fits its box and no two boxes on one line meet; painted ink of
@@ -504,19 +553,22 @@ static void alt_page(void)
     maqam_set_project(sikah, 7);
     struct maqam_view v;
     struct groove_tuning g, before;
-    enc(1, 3);
+    btn(SCL);
     maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "ALT"));
+    CHECK(!strcmp(v.title, "TRACK"));
     key(11);                                     /* E4: pitch class 4 */
     maqam_page_view(0, &v);
     CHECK(v.sel == (1U << 4));
-    has("key knob", v.knob[0][1], "E");
-    play_check(11, maqam_key_note(0, 11, 0, 0), "ALT page: E key sounds (the step records its note)");
-    btn(SCL);                                    /* back on the last subpage: ALT */
+    has("key knob", v.knob[2][1], "E");
+    play_check(11, maqam_key_note(0, 11, 0, 0), "TRACK page: E key sounds (the step records its note)");
+    btn(SCL);                                    /* reopens on the last subpage: TRACK */
     maqam_page_view(0, &v);
-    CHECK(!strcmp(v.title, "ALT") && v.sel == (1U << 4));
+    CHECK(!strcmp(v.title, "TRACK") && v.sel == (1U << 4));
     tables(0, &before);
-    enc(3, -100);                                /* K2: alt E -100 cents */
+    enc(5, 1);                                   /* K4: one cent per detent */
+    tables(0, &g);
+    CHECK(g.alt[4] == before.alt[4] + 1);
+    enc(5, -100 - before.alt[4] - 1);            /* alt E -100 cents */
     tables(0, &g);
     CHECK(g.alt[4] == -100);
     CHECK(!memcmp(g.main, before.main, 12));     /* main untouched */
@@ -524,65 +576,63 @@ static void alt_page(void)
     has("readout: 24-TET deviation + spelled name", v.line[0], "ALT 0 E" MAQAM_FLAT "4");   /* -100 on E = Eb, 0 c off the grid */
     has("name of the resulting pitch (Eb)", v.line[0], "E" MAQAM_FLAT "4");
     has("main entry shown too", v.line[1], "MAIN ");
-    has("alt knob value is signed", v.knob[1][1], "-100");
-    enc(4, 2);                                   /* K3: +20 */
-    tables(0, &g);
-    CHECK(g.alt[4] == -80);
-    enc(3, 1); tables(0, &g); CHECK(g.alt[4] == -79);
-    enc(4, 127); tables(0, &g); CHECK(g.alt[4] == 127);   /* clamps at +127 */
-    enc(3, 127); tables(0, &g); CHECK(g.alt[4] == 127);
-    enc(4, -127); enc(4, -127); tables(0, &g); CHECK(g.alt[4] == -127);
-    enc(3, -50); tables(0, &g); CHECK(g.alt[4] == -127);
+    has("alt knob value is signed", v.knob[3][1], "-100");
+    has("alt knob label", v.knob[3][0], "ALT");
+    enc(5, 1); tables(0, &g); CHECK(g.alt[4] == -99);     /* +/-1 per detent, no +/-10 */
+    enc(5, -1); tables(0, &g); CHECK(g.alt[4] == -100);
+    enc(5, 127); tables(0, &g); CHECK(g.alt[4] == 27);
+    enc(5, 127); enc(5, 127); tables(0, &g); CHECK(g.alt[4] == 127);   /* clamps at +127 */
+    maqam_page_view(0, &v);
+    has("alt knob at the top", v.knob[3][1], "+127");
+    enc(5, -127); enc(5, -127); enc(5, -127); tables(0, &g); CHECK(g.alt[4] == -127);
+    enc(5, -50); tables(0, &g); CHECK(g.alt[4] == -127);
     printf("%-52s ok\n", "alt edits clamp at -127..+127");
-    enc(3, 44);                                  /* -83 */
-    enc(3, -17);                                 /* -100 */
-    /* K1 selects another key; edits go to it only */
-    enc(2, 3);                                   /* E -> G */
+    enc(5, 27);                                  /* -100 */
+    /* K3 selects another key (E -> G); edits go to it only */
+    enc(4, 3);
     maqam_page_view(0, &v);
     CHECK(v.sel == (1U << 7));
-    has("K1 key", v.knob[0][1], "G");
-    enc(3, 5);
+    has("K3 key", v.knob[2][1], "G");
+    enc(5, 5);
     tables(0, &g);
     CHECK(g.alt[7] == before.alt[7] + 5 && g.alt[4] == -100);
+    enc(4, 9);                                   /* wraps: G + 9 = E */
+    maqam_page_view(0, &v);
+    CHECK(v.sel == (1U << 4));
     /* the alt row under the keys is the alt table, shown as cents from the nearest quarter tone */
-    CHECK(v.cents[4] == 0);
-    key(12); enc(3, 127); enc(3, 127);           /* F: +127 right next to E -100 ... */
-    key(13); enc(3, -127);                       /* ... and F#: -127 */
+    key(12); enc(5, 127); enc(5, 127);           /* F: +127 right next to E -100 ... */
+    key(13); enc(5, -127); enc(5, -127);         /* ... and F#: -127 */
     key(11);                                     /* E selected again */
     maqam_page_view(0, &v);
+    tables(0, &g);
+    CHECK(g.alt[5] == 127 && g.alt[6] == -127);
     CHECK(v.cents[4] == 0 && v.cents[5] == -23 && v.cents[6] == 23);   /* -100, +127, -127 vs 24-TET */
     ms(300);
     cents_layout(&v);
-    shot("scale_4_alt");     /* E -100, F +127, F# -127 side by side */
-    key(12); enc(3, before.alt[5] - 127);        /* put F and F# back */
-    key(13); enc(3, before.alt[6] + 127);
-    tables(0, &g);
+    shot("scale_track_alt_extremes");     /* E -100, F +127, F# -127 side by side */
+    key(12); enc(5, before.alt[5] - 127);        /* put F and F# back */
+    key(13); enc(5, before.alt[6] + 127);
     key(11);
-    ms(300);
     ms(300);
     /* another track keeps its own alt table */
     tables(1, &g);
     CHECK(!memcmp(g.alt, before.alt, 12));
-    /* the engine plays the edited alt entry: it is what groove_tuning_get holds, and a scale change resets it */
-    enc(5, 1);                                   /* K4 RESET: the scale's default alt table */
+    /* a scale change resets the alt table (spec) */
+    enc(5, 20);
+    btn(SCL);
+    enc(4, 1);
     int8_t def[GROOVE_TUNING_KEYS];
-    maqam_alt_default(sikah, 7, def);
-    tables(0, &g);
-    CHECK(!memcmp(g.alt, def, 12));
-    enc(3, 20);
-    enc(1, -3);                                  /* page 1/4 */
-    enc(4, 1);                                   /* scale change resets the alt table (spec) */
     tables(0, &g);
     maqam_alt_default(maqam_project_scale(), 7, def);
     CHECK(!memcmp(g.alt, def, 12));
     /* a drum track: alt cannot be edited */
-    enc(1, 3);
+    btn(SCL);
     enc(0, 7);
-    enc(3, 10);
+    enc(5, 10);
     tables(7, &g);
     int8_t zero[24] = {0};
     CHECK(!memcmp(&g, zero, sizeof g));
-    printf("alt page: key pick (panel key, K1), K2 +/-1 and K3 +/-10 cents with readout and name, K4 reset\n");
+    printf("alt: keys play and select (K3 too), K4 +/-1 cents clamped at -127..+127, readout and name\n");
 }
 
 /* ---- the sample-bank hint ---- */
@@ -704,8 +754,8 @@ static void pixels(void)
 {
     boot();
     ms(400);
-    shot("scale_1_project_default");
-    CHECK(ink(8, 35, 230, 7) > 50);                  /* the section row: T1 DX7  PROJECT  1/4 */
+    shot("scale_default");
+    CHECK(ink(8, 35, 230, 7) > 50);                  /* the section row: T1 DX7  SCALE  1/2 */
     unsigned base_sub = hash_rect(8, 46, 224, 16);
     CHECK(ink(8, 46, 224, 16) > 100);                /* subtitle text is painted */
     maqam_set_project(find("SIKAH"), 7);
@@ -713,23 +763,27 @@ static void pixels(void)
     CHECK(hash_rect(8, 46, 224, 16) != base_sub);    /* and repaints when the scale changes */
     CHECK(ink(8, 46, 224, 16) > 100);
     CHECK(ink(8, 78, 224, 8) > 20);                  /* the home hint row */
-    shot("scale_1_project_sikah");
+    shot("scale_sikah");
     maqam_set_project(find("RAST"), 0);
+    ms(300);
+    shot("scale_rast");
     enc(1, 1);
     ms(300);
-    shot("scale_2_track");
-    enc(2, 1); enc(3, 4); enc(5, 1);
-    ms(300);
-    shot("scale_2_track_override");
-    enc(1, 1);
-    ms(300);
-    shot("scale_3_keys");
-    enc(1, 1);
+    shot("track_follow");
+    enc(2, 1); enc(3, 1);                            /* OWN, its own layout WHITE */
     key(11);
-    enc(3, -100);
+    enc(5, -100);
     ms(300);
     CHECK(ink(8, 134, 224, 16) > 100);               /* the large ALT readout */
-    shot("scale_4_alt");
+    shot("track_own");
+    /* a drum track on the SCALE page */
+    enc(0, 7);
+    enc(1, 1);
+    ms(300);
+    shot("scale_drums");
+    enc(1, 1);
+    ms(300);
+    shot("track_drums");
     /* the step page with a plain and an alt step (the alt mark) */
     sim_boot(1);
     maqam_init();
@@ -782,15 +836,18 @@ static void degree_row(void)
     {   static const char *const want[] = {"C", "D", "E" MAQAM_HF, "F", "G", "A", "B" MAQAM_FLAT "\x19", "B" MAQAM_HF "\x18"};
         expect_row("Rast on C: Bb marked down, Bd marked up", &v, want, 8); }
     shot("scale_row_rast");
-    /* the track page shows the same row for its own scale */
-    enc(1, 1);
-    enc(2, 1); enc(3, 4); enc(5, 1);              /* override: Bayati?? no: Rast on D */
+    /* the SCALE page shows the row of the selected track's own scale */
+    btn(SCL);
+    enc(2, 1);                                    /* OWN */
+    btn(SCL);
+    enc(2, 4);                                    /* root D, this track only */
     maqam_page_view(0, &v);
-    has("track page: row of the track's scale", v.lab[0], "D");
+    has("scale page: row of the track's own scale", v.lab[0], "D");
     CHECK(v.ncell >= 5);
+    CHECK(maqam_project_root() == 0);
     /* every scale: the row has one cell per degree of the union, 5..9 cells (12 for WEST CHR) */
     unsigned bad = 0;
-    enc(1, -1);
+    btn(SCL); enc(2, -1); btn(SCL);               /* FOLLOW again: the project is edited below */
     for (unsigned sc = 0; sc < NSCALES; ++sc) {
         maqam_set_project(sc, 0);
         maqam_page_view(0, &v);
@@ -806,13 +863,12 @@ static void degree_row(void)
     g.main[1] = 17;
     CHECK(groove_tuning_set(0, &g) == 0);
     maqam_refresh();
-    enc(1, 1);
     maqam_page_view(0, &v);
     CHECK(v.custom && v.ncell == 0);
     /* ALT strip: all 12 keys, degree keys spelled, other keys dimmed with the fixed name */
     boot();
     maqam_set_project(find("BAYAT"), 4);
-    enc(1, 3);
+    btn(SCL);
     ms(300);
     maqam_page_view(0, &v);
     CHECK(v.ncell == 0);
@@ -825,7 +881,7 @@ static void degree_row(void)
     }
     CHECK(v.lit == ((1U << 2) | (1U << 4) | (1U << 5) | (1U << 7) | (1U << 9) | (1U << 10) | (1U << 0)));
     CHECK(!(v.lit & ((1U << 1) | (1U << 3) | (1U << 6) | (1U << 8))));    /* C# D# F# G# are dimmed */
-    shot("scale_alt_bayati");
+    shot("track_bayati");
     printf("alt strip: degree keys spelled (Bb), C# D# F# G# dimmed with their fixed names\n");
     /* a step tile showing Bb4 */
     sim_boot(1);
@@ -849,9 +905,10 @@ int main(void)
     navigation();
     header_tag();
     frame_cycling();
-    project_page();
-    track_page();
-    keys_page();
+    scale_page();
+    scopes();
+    custom_and_drums();
+    layouts();
     alt_page();
     reduce_bank();
     degree_row();

@@ -55,8 +55,8 @@ unsigned maqam_track_root(unsigned track);       /* 0..23 (0 for CUSTOM) */
 /* Re-derive each track's label from the engine tables (after V13 undo or any outside table edit). */
 void maqam_refresh(void);
 
-/* Key layout, in the order the KEYS page cycles them. The project default is saved in the trailer (flags
-   bits 1-2); a track may override it (RAM only). 0 SNAP is the default so a stock or absent trailer gives SNAP. */
+/* Key layout, in the order the TRACK page cycles them. The project default is saved in the trailer (flags
+   bits 1-2); a track with its own scale (override) has its own layout (RAM only; after a load it reads as the project's). 0 SNAP is the default so a stock or absent trailer gives SNAP. */
 enum { MAQAM_SNAP, MAQAM_WHITE, MAQAM_CHROM };
 unsigned maqam_default_layout(void);
 int maqam_set_default_layout(unsigned layout);   /* 0 ok, <0 bad argument */
@@ -65,9 +65,9 @@ int maqam_set_default_layout(unsigned layout);   /* 0 ok, <0 bad argument */
    Key 0 is MIDI 53 (F3) at octave 0; key 7 is C4. The engine tunes the note; only numbers are chosen here. */
 void maqam_keys_reset(void);                      /* per-track layouts and directions to defaults */
 unsigned maqam_layout(unsigned track);            /* effective layout (CHROM for CUSTOM or chromatic scales) */
-int maqam_layout_raw(unsigned track);             /* the track's own layout, or -1 when it follows the project */
+int maqam_layout_raw(unsigned track);             /* the layout of the track's scope: its own when overridden, else the project's (even for chromatic scales) */
 unsigned maqam_last_descending(unsigned track);   /* the last key of the track went down (within the 1 s window state) */
-int maqam_set_layout(unsigned track, int layout); /* -1 follows the project default; 0 ok */
+int maqam_set_layout(unsigned track, int layout); /* -1 = the project default (a track that follows always uses it); 0 ok */
 /* Pure: the note for `key` going up (descending=0) or down (1). */
 unsigned maqam_key_note(unsigned track, unsigned key, int octave, unsigned descending);
 /* A key goes down: updates the direction (lower than the previous key within 1 s = descending). */
@@ -105,19 +105,19 @@ unsigned maqam_degree_name(unsigned scale, unsigned root, unsigned q, char out[4
 
 /* pages.c: the scale pages (control task only). The screen hooks in screen.c only open the page, pass the
    encoders/keys in and draw this view; every value is read back from the maqam_* state. */
-enum { MAQAM_SUBPAGES = 4 };
+enum { MAQAM_SUBPAGES = 2 };
 struct maqam_view {
-    const char *title;               /* the page word: PROJECT, TRACK, KEYS, ALT (static) */
-    uint8_t index;                   /* its position 1..MAQAM_SUBPAGES (drawn n/4) */
+    const char *title;               /* the page word: SCALE, TRACK (static) */
+    uint8_t index;                   /* its position 1..MAQAM_SUBPAGES (drawn n/2) */
 #define MAQAM_SUB_BIG 19                /* longest subtitle drawn in the large font */
     char sub[32];                    /* "Ed ARAB Sikah trad" (arrow after the scale when its forms differ) */
-    char status[28];                 /* "TRACK 3  FOLLOWS PROJECT" / OVERRIDE / CUSTOM TABLE / DRUMS - NOT TUNED */
-    char note[16];                   /* "home: D" hint ("" for WEST scales); "plays: SNAP" on the KEYS page */
-    char line[2][24];                /* ALT page only: "ALT -100 Eb4" (large), "MAIN -47 Ed4" */
+    char status[28];                 /* "TRACK 3  FOLLOWS PROJECT" / OWN SCALE / CUSTOM TABLE / DRUMS - NOT TUNED */
+    char note[16];                   /* "home: D" hint ("" for WEST scales) */
+    char line[2][24];                /* TRACK page only: "ALT -100 Eb4" (large), "MAIN -47 Ed4" */
     const char *knob[4][2];          /* label, value: static strings, or rname / atext below; NULL label = no knob */
     char rname[4], atext[12];        /* the tonic's name; the alt cents with a sign ("+0") */
     char warn[36];                   /* "REDUCE SAMPLE BANK" when the last save could not store tuning */
-    int8_t cents[12];                /* the cents under each cell: main table, or alt on the ALT page */
+    int8_t cents[12];                /* the cents under each cell: main table on SCALE, alt on TRACK */
     char lab[12][4];                 /* cell names: spelled where a key carries a degree, else the fixed name */
     uint16_t lit, root, sel;         /* cell masks: scale keys, root key, selected alt key */
     uint8_t ncell;                   /* >0: the degree row, ncell cells in pitch order (names carry ^ / v marks);
@@ -128,7 +128,7 @@ void maqam_page_next(void);                      /* SCL on the page: the next su
 /* The overview / step header tag ("Ed RAST"); 0 for drums and WEST chromatic, "CUST" for a custom table. 12 bytes. */
 unsigned maqam_header_tag(unsigned track, char out[12]);
 /* Encoders as the panel gives them (0 selects the track and is handled by the caller); key_down: panel keys
-   that went down (ALT: the first selects that key; the keys play as on any page). */
+   that went down (TRACK: the first selects the alt key; the keys play as on any page). */
 void maqam_page_control(unsigned track, const int16_t enc[7], uint32_t key_down);
 void maqam_page_view(unsigned track, struct maqam_view *v);
 /* A project save finished with result r (0 or a GROOVE_PROJECT_* / flash code): remembers whether tuning could

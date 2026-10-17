@@ -78,6 +78,7 @@ MAQAM_SMALL int maqam_set_override(unsigned t, unsigned scale, unsigned root)
     if (!maqam_melodic(t) || !ok_pick(scale, root)) return -1;
     int r = retune(t, scale, root);
     if (r) return r;
+    if (!maqam_overridden(t)) maqam_set_layout(t, (int)st.layout); /* its own layout starts as a copy of the project's */
     st.over |= (uint8_t)(1U << t);
     st.tscale[t] = (uint8_t)scale;
     st.troot[t] = (uint8_t)root;
@@ -87,7 +88,7 @@ MAQAM_SMALL int maqam_clear_override(unsigned t)
 {
     if (!maqam_overridden(t)) return 0;
     int r = retune(t, st.scale, st.root);
-    if (!r) st.over &= (uint8_t)~(1U << t);
+    if (!r) { st.over &= (uint8_t)~(1U << t); maqam_set_layout(t, -1); }
     return r;
 }
 MAQAM_SMALL int maqam_set_alt(unsigned t, unsigned key, int cents)

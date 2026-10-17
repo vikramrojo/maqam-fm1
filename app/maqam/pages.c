@@ -6,7 +6,7 @@
 #include <string.h>
 
 enum { KEY_BASE = 53, PC_KEYS = 27 };
-enum { SUB_PROJECT, SUB_TRACK, SUB_KEYS, SUB_ALT };
+enum { SUB_SCALE, SUB_TRACK };
 static unsigned sub, sel;                                   /* sub-page; selected alt key (pitch class) */
 
 static unsigned no_space;                                   /* the last save could not store tuning */
@@ -65,36 +65,37 @@ MAQAM_SMALL static void track_base(unsigned t, unsigned *s, unsigned *r)
 MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t key_down)
 {
     int d[4] = {enc[2], enc[3], enc[4], enc[5]};
+    unsigned pc = key_pc(key_down), mel = maqam_melodic(t);
     sub = maqam_mod((int)sub + enc[1], MAQAM_SUBPAGES);
-    unsigned pc = key_pc(key_down);
-    if (sub == SUB_PROJECT) {
-        unsigned s = maqam_project_scale(), r = maqam_project_root();
+    if (sub == SUB_SCALE) {                                /* a track with its own scale edits only that track */
         if (d[0] || d[1] || d[2]) {
-            maqam_set_project(step_scale(s, d[1], d[2]), maqam_mod((int)r + d[0], 24));
+            unsigned s, r;
+            track_base(t, &s, &r);
+            s = step_scale(s, d[1], d[2]);
+            r = maqam_mod((int)r + d[0], 24);
+            if (mel && maqam_overridden(t)) maqam_set_override(t, s, r);
+            else maqam_set_project(s, r);
         }
         if (d[3]) maqam_set_intonation(d[3] > 0);
-    } else if (sub == SUB_TRACK) {
-        if (!maqam_melodic(t)) return;
+        return;
+    }
+    if (pc < 12) sel = pc;                                 /* a key played on the TRACK page is the alt key */
+    if (d[1]) {                                            /* layouts are numbered in display order */
+        int l = clampi(maqam_layout_raw(t) + d[1], 0, 2);
+        if (mel && maqam_overridden(t)) maqam_set_layout(t, l);
+        else maqam_set_default_layout((unsigned)l);
+    }
+    if (!mel) return;
+    if (d[0] > 0 && !maqam_overridden(t)) {
         unsigned s, r;
         track_base(t, &s, &r);
-        if (d[0] > 0 && !maqam_overridden(t)) maqam_set_override(t, s, r);
-        else if (d[0] < 0) maqam_clear_override(t);
-        if (d[1] || d[2] || d[3]) maqam_set_override(t, step_scale(s, d[2], d[3]), maqam_mod((int)r + d[1], 24));
-    } else if (sub == SUB_KEYS) {                          /* the layouts are numbered in display order */
-        if (d[0]) maqam_set_default_layout((unsigned)clampi((int)maqam_default_layout() + d[0], 0, 2));
-        if (d[1] && maqam_melodic(t)) maqam_set_layout(t, clampi(maqam_layout_raw(t) + d[1], -1, 2));
-    } else {
-        sel = pc < 12 ? pc : maqam_mod((int)sel + d[0], 12);
-        if (!maqam_melodic(t)) return;
+        maqam_set_override(t, s, r);
+    } else if (d[0] < 0) maqam_clear_override(t);
+    sel = maqam_mod((int)sel + d[2], 12);
+    if (d[3]) {
         struct groove_tuning g;
         maqam_engine_get(t, &g);
-        if (d[1] || d[2]) maqam_set_alt(t, sel, clampi(g.alt[sel] + d[1] + 10 * d[2], -127, 127));
-        if (d[3]) {                                        /* RESET: the scale's default alt table */
-            unsigned s = maqam_track_scale(t);
-            if (s == MAQAM_CUSTOM) memset(g.alt, 0, sizeof g.alt);
-            else maqam_alt_default(s, maqam_track_root(t), g.alt);
-            maqam_engine_set(t, &g);
-        }
+        maqam_set_alt(t, sel, clampi(g.alt[sel] + d[3], -127, 127));
     }
 }
 
@@ -172,7 +173,7 @@ MAQAM_SMALL static void strip(unsigned s, unsigned r, const struct groove_tuning
 }
 MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
 {
-    static const char *const title[MAQAM_SUBPAGES] = {"PROJECT", "TRACK", "KEYS", "ALT"};
+    static const char *const title[MAQAM_SUBPAGES] = {"SCALE", "TRACK"};
     struct groove_tuning g;
     memset(v, 0, sizeof *v);
     memset(&g, 0, sizeof g);
@@ -181,7 +182,7 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
     v->tuned = (uint8_t)maqam_melodic(t);
     if (v->tuned) maqam_engine_get(t, &g);
     unsigned s = maqam_project_scale(), r = maqam_project_root();
-    if (v->tuned && sub != SUB_PROJECT) { s = maqam_track_scale(t); r = maqam_track_root(t); }
+    if (v->tuned) { s = maqam_track_scale(t); r = maqam_track_root(t); }
     unsigned custom = s == MAQAM_CUSTOM, set = custom ? 0 : SCALES[s].set;
     v->custom = (uint8_t)custom;
     maqam_degree_name(s, r, r, v->rname);                 /* a CUSTOM scale gives the fixed name */
@@ -190,38 +191,29 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
     memcpy(p, "TRACK ", 6);
     p += 6 + maqam_num(p + 6, (int)t + 1, 0);
     put(p, sizeof v->status - (unsigned)(p - v->status), !v->tuned ? "  DRUMS - NOT TUNED"
-        : maqam_track_scale(t) == MAQAM_CUSTOM ? "  CUSTOM TABLE"
-        : maqam_overridden(t) ? "  OVERRIDE" : "  FOLLOWS PROJECT");
+        : custom ? "  CUSTOM TABLE"
+        : maqam_overridden(t) ? "  OWN SCALE" : "  FOLLOWS PROJECT");
     if (!custom && set != SET_WEST) {                     /* a hint: it never moves the root */
         put(v->note, sizeof v->note, "home: ");
         cat(v->note, sizeof v->note, maqam_slot_name(SCALES[s].home));
     }
-    memcpy(v->cents, g.main, 12);
-    strip(s, r, &g, v, sub <= SUB_TRACK && !custom);
+    memcpy(v->cents, sub ? g.alt : g.main, 12);
+    strip(s, r, &g, v, !sub && !custom);
     if (no_space) put(v->warn, sizeof v->warn, "SAVE FAILED: REDUCE SAMPLE BANK");
 
-    if (sub <= SUB_TRACK) {                               /* PROJECT: ROOT SET SCALE TUNING; TRACK: OVERRIDE ROOT SET SCALE */
+    if (!sub) {                                           /* SCALE: ROOT SET SCALE TUNING */
         const char *const k[3][2] = {{"ROOT", custom ? "--" : v->rname}, {"SET", custom ? "--" : SET_NAMES[set]},
                                      {"SCALE", custom ? "CUSTOM" : SCALES[s].name}};
-        memcpy(v->knob + sub, k, sizeof k);
-        v->knob[sub ? 0 : 3][0] = sub ? "OVERRIDE" : "TUNING";
-        v->knob[sub ? 0 : 3][1] = sub ? (maqam_overridden(t) ? "ON" : "OFF") : (maqam_trad() ? "TRAD" : "EQUAL");
-    } else if (sub == SUB_KEYS) {
-        int raw = maqam_layout_raw(t);
-        v->knob[0][0] = "PROJECT"; v->knob[0][1] = layout_name[maqam_default_layout()];
-        v->knob[1][0] = "TRACK"; v->knob[1][1] = raw < 0 ? "FOLLOW" : layout_name[raw];
-        if (v->tuned) {
-            put(v->note, sizeof v->note, "plays: ");
-            cat(v->note, sizeof v->note, layout_name[maqam_layout(t)]);
-        }
-    } else {
-        memcpy(v->cents, g.alt, 12);
+        memcpy(v->knob, k, sizeof k);
+        v->knob[3][0] = "TUNING";
+        v->knob[3][1] = maqam_trad() ? "TRAD" : "EQUAL";
+    } else {                                              /* TRACK: SCOPE KEYS ALT KEY ALT */
         v->sel = (uint16_t)(1U << sel);
         maqam_num(v->atext, g.alt[sel], 1);
-        v->knob[0][0] = "KEY"; v->knob[0][1] = maqam_slot_name(2 * sel);
-        v->knob[1][0] = "ALT +/-1"; v->knob[1][1] = v->atext;
-        v->knob[2][0] = "ALT +/-10"; v->knob[2][1] = v->atext;
-        v->knob[3][0] = "RESET"; v->knob[3][1] = "TURN";
+        v->knob[0][0] = "SCOPE"; v->knob[0][1] = maqam_overridden(t) ? "OWN" : "FOLLOW";
+        v->knob[1][0] = "KEYS"; v->knob[1][1] = layout_name[maqam_layout_raw(t)];
+        v->knob[2][0] = "ALT KEY"; v->knob[2][1] = maqam_slot_name(2 * sel);
+        v->knob[3][0] = "ALT"; v->knob[3][1] = v->atext;
         for (unsigned i = 0; i < 2; ++i) {                /* "ALT -100 Eb4", "MAIN -47 Ed4" */
             char *q = v->line[i];
             memcpy(q, i ? "MAIN " : "ALT ", 5);
