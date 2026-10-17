@@ -393,7 +393,7 @@ static void alt_page(void)
     CHECK(!memcmp(g.main, before.main, 12));     /* main untouched */
     maqam_page_view(0, &v);
     has("signed cents readout", v.body[0], "-100");
-    has("name of the resulting pitch (Eb = D#)", v.body[0], "D#4");
+    has("name of the resulting pitch (Eb)", v.body[0], "E" MAQAM_FLAT "4");
     has("main entry shown too", v.body[1], "MAIN ");
     enc(4, 2);                                   /* K3: +20 */
     tables(0, &g);
@@ -583,6 +583,101 @@ static void pixels(void)
     printf("pixels: title, subtitle, home hint, alt readout painted; PNGs in build/host/\n");
 }
 
+/* ---- the degree row and the spelled key strip (task 5.5) ---- */
+static void expect_row(const char *what, const struct maqam_view *v, const char *const *want, unsigned n)
+{
+    int ok = v->ncell == n;
+    for (unsigned i = 0; ok && i < n; ++i) ok = !strcmp(v->lab[i], want[i]);
+    printf("%-52s %s\n", what, ok ? "ok" : "FAIL");
+    if (!ok) ++failures;
+}
+static void degree_row(void)
+{
+    struct maqam_view v;
+    struct groove_tuning g;
+    boot();
+    maqam_set_project(find("BAYAT"), 4);          /* Bayati on D, TRAD */
+    ms(300);
+    maqam_page_view(0, &v);
+    {   static const char *const want[] = {"D", "E" MAQAM_HF, "F", "G", "A", "B" MAQAM_FLAT, "C"};
+        expect_row("Bayati on D: seven cells D Ed F G A Bb C", &v, want, 7); }
+    CHECK(v.lit == 0x7f && v.root == 1);
+    tables(0, &g);
+    CHECK(v.cents[0] == g.main[2] && v.cents[1] == g.main[4] && v.cents[5] == g.main[10] && v.cents[6] == g.main[0]);
+    {   static const int8_t want[7] = {0, -47, -6, -2, 2, 16, -4};     /* TRAD offsets vs 12-TET, in cell order */
+        CHECK(!memcmp(v.cents, want, 7)); }
+    printf("%-52s ok\n", "Bayati row cents: D 0, Ed -47, F -6, G -2, A +2, Bb +16, C -4");
+    has("subtitle (spelled root)", v.sub, "D arab bayati");
+    CHECK(ink(6, 80, 228, 22) > 500);
+    shot("scale_row_bayati");
+    maqam_set_project(find("RAST"), 0);
+    ms(300);
+    maqam_page_view(0, &v);
+    {   static const char *const want[] = {"C", "D", "E" MAQAM_HF, "F", "G", "A", "B" MAQAM_FLAT "\x19", "B" MAQAM_HF "\x18"};
+        expect_row("Rast on C: Bb marked down, Bd marked up", &v, want, 8); }
+    shot("scale_row_rast");
+    /* the track page shows the same row for its own scale */
+    enc(1, 1);
+    enc(2, 1); enc(3, 4); enc(5, 1);              /* override: Bayati?? no: Rast on D */
+    maqam_page_view(0, &v);
+    has("track page: row of the track's scale", v.lab[0], "D");
+    CHECK(v.ncell >= 5);
+    /* every scale: the row has one cell per degree of the union, 5..9 cells (12 for WEST CHR) */
+    unsigned bad = 0;
+    enc(1, -1);
+    for (unsigned sc = 0; sc < NSCALES; ++sc) {
+        maqam_set_project(sc, 0);
+        maqam_page_view(0, &v);
+        unsigned u = 0, un = scale_up(&SCALES[sc]) | scale_down(&SCALES[sc]);
+        for (unsigned i = 0; i < 24; ++i) u += un >> i & 1U;
+        bad += v.ncell != u || v.ncell < 5 || (v.ncell > 9 && sc != 0);
+    }
+    CHECK(bad == 0);
+    printf("degree row: one cell per degree of the scale (5-9; 12 for chromatic)\n");
+    /* a CUSTOM table keeps the 12-key strip */
+    maqam_set_project(find("RAST"), 0);
+    tables(0, &g);
+    g.main[1] = 17;
+    CHECK(groove_tuning_set(0, &g) == 0);
+    maqam_refresh();
+    enc(1, 1);
+    maqam_page_view(0, &v);
+    CHECK(v.custom && v.ncell == 0);
+    /* ALT strip: all 12 keys, degree keys spelled, other keys dimmed with the fixed name */
+    boot();
+    maqam_set_project(find("BAYAT"), 4);
+    enc(1, 3);
+    ms(300);
+    maqam_page_view(0, &v);
+    CHECK(v.ncell == 0);
+    has("alt strip: A# key is labelled Bb", v.lab[10], "B" MAQAM_FLAT);
+    {   static const char *const want[12] = {"C", "C#", "D", "D#", "E" MAQAM_HF, "F", "F#", "G", "G#", "A", "B" MAQAM_FLAT, "B"};
+        unsigned ok = 1;
+        for (unsigned k = 0; k < 12; ++k) if (k != 4 && k != 10 && strcmp(v.lab[k], want[k])) ok = 0;
+        has("alt strip: E key reads Ed", v.lab[4], "E" MAQAM_HF);
+        CHECK(ok);
+    }
+    CHECK(v.lit == ((1U << 2) | (1U << 4) | (1U << 5) | (1U << 7) | (1U << 9) | (1U << 10) | (1U << 0)));
+    CHECK(!(v.lit & ((1U << 1) | (1U << 3) | (1U << 6) | (1U << 8))));    /* C# D# F# G# are dimmed */
+    shot("scale_alt_bayati");
+    printf("alt strip: degree keys spelled (Bb), C# D# F# G# dimmed with their fixed names\n");
+    /* a step tile showing Bb4 */
+    sim_boot(1);
+    maqam_init();
+    maqam_set_project(find("BAYAT"), 4);
+    ms(50);
+    btn(REC); key(17); key(11); btn(REC);
+    btn(SEQ);
+    ms(300);
+    struct groove_step c;
+    groove_sequence_read(0, 0, &c, 1);
+    CHECK(c.note == 70);
+    char nm[12];
+    maqam_note_name(0, c.note, 0, nm);
+    has("step 1 tile name", nm, "B" MAQAM_FLAT "4");
+    shot("steps_bb4");
+}
+
 int main(void)
 {
     navigation();
@@ -591,6 +686,7 @@ int main(void)
     keys_page();
     alt_page();
     reduce_bank();
+    degree_row();
     pixels();
     printf(failures ? "FAILED: %d\n" : "pages_test: all ok\n", failures);
     return failures != 0;

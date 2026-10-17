@@ -127,7 +127,10 @@ nearest quarter tone, `Cd5` for B4 +50, a zero offset equal to the stock 12-tone
 stock formula is copied into the test), track names from the real tables (Rast TRAD: `Ed4`, `Bd4`; alt E with alt
 0 reads `E4.` with the mark, plain E steps read `Ed4`; drum tracks keep stock names), and the real `screen.c`:
 the step NOTE knob shows `Ed4` / `E4.`, and the step tiles differ for plain and alt steps and repaint when a table
-changes.
+changes. Scale-aware spelling (task 5.4): Bayati on D (`Bb4`, D Ed F G A Bb C), Saba `Gb`, Hijaz up and down,
+Rast `Bd`/`Bb`, Major on A#/Bb and C#, pentatonic and WEST chromatic fall back to stock names, alt E at -100 reads
+`Eb4`, and all 73 scales x 24 roots are either spelled with one letter and one accidental per degree or fall back
+as a whole (the counts are printed).
 
 ## Pages test
 
@@ -152,3 +155,7 @@ committed hashes runs only on macos-latest, with `continue-on-error`; treat a
 mismatch there as a prompt to investigate, and re-record only on purpose with
 `--record` on the machine that produced the change. Ubuntu is not compared with
 the committed hashes.
+
+The degree row and the spelled alt strip (task 5.5) are covered by `pages_test` too: the Bayati row cells, cents and
+marks, the Rast row's `Bb` down and `Bd` up, one cell per degree for all 73 scales, the Bayati alt strip, and the
+PNGs `scale_row_bayati`, `scale_row_rast`, `scale_alt_bayati` and `steps_bb4` in `build/host/`.
