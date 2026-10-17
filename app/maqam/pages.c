@@ -116,6 +116,9 @@ MAQAM_SMALL static void cat(char *dst, unsigned n, const char *s)
     if (l < n - 1) put(dst + l, n - l, s);
 }
 /* The subtitle: tonic, set, scale and intonation (screen.c draws text uppercase, so no case folding here). */
+/* Cents from the nearest quarter tone (24-TET), rounded half away from zero like the names: what the
+   scale pages show, since every scale is read as 24-TET plus a deviation. */
+MAQAM_SMALL static int dev24(int c) { return c - 50 * (c >= 0 ? (c + 25) / 50 : -((25 - c) / 50)); }
 MAQAM_SMALL static void subtitle(char *out, unsigned n, unsigned s, const char *tonic, unsigned desc)
 {
     for (unsigned set = 1;; set = 0) {          /* drop the set name when the line won't fit the large font */
@@ -218,9 +221,10 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
             char *q = v->line[i];
             memcpy(q, i ? "MAIN " : "ALT ", 5);
             int c = i ? g.main[sel] : g.alt[sel];
-            q += (i ? 5 : 4) + maqam_num(q + (i ? 5 : 4), c, 0);
+            q += (i ? 5 : 4) + maqam_num(q + (i ? 5 : 4), dev24(c), 0);
             *q++ = ' ';
             maqam_name_scale(s, r, 60 + sel, c, q);
         }
     }
+    for (unsigned i = 0; i < 12; ++i) v->cents[i] = (int8_t)dev24(v->cents[i]);
 }
