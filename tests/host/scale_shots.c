@@ -117,13 +117,6 @@ int main(void)
     btn(SAVE); btn(SAVE); ms(300);                   /* refused: non-zero tuning + over-size bank */
     btn(HOME); open_scale(); ms(400);
     snap("23_reduce_sample_bank");
-    /* the scale tag in the header of the overview page */
-    sim_boot(1);
-    maqam_init();
-    ms(50);
-    maqam_set_project(find("RAST"), 7);
-    ms(400);
-    snap("24_overview_tag_rast");
     /* the stock DX7 scaling screens, the frame the scale pages follow (HOME+SCL, then SCL) */
     sim_boot(1); maqam_init(); ms(50);
     hold_home_scl(); ms(400);

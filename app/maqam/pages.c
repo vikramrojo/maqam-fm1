@@ -104,20 +104,6 @@ MAQAM_SMALL void maqam_page_control(unsigned t, const int16_t enc[7], uint32_t k
     }
 }
 
-/* The header tag on the overview and step pages: "Ed RAST" (spelled root, scale name cut to 4). 0 (nothing
-   written) for a drum track or WEST chromatic; CUSTOM gives "CUST". out holds 12 bytes. */
-MAQAM_SMALL unsigned maqam_header_tag(unsigned t, char out[12])
-{
-    unsigned s = maqam_track_scale(t);
-    memset(out, 0, 12);
-    if (!maqam_melodic(t) || !s) return 0;
-    if (s == MAQAM_CUSTOM) { memcpy(out, "CUST", 4); return 1; }
-    maqam_degree_name(s, maqam_track_root(t), maqam_track_root(t), out);
-    strcat(out, " ");
-    strncat(out, SCALES[s].name, 4);
-    return 1;
-}
-
 /* ---- view ---- */
 MAQAM_SMALL static void put(char *dst, unsigned n, const char *s) { strncpy(dst, s, n - 1); dst[n - 1] = 0; }
 MAQAM_SMALL static void cat(char *dst, unsigned n, const char *s)

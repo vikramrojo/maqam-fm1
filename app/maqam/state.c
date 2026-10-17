@@ -49,6 +49,7 @@ MAQAM_SMALL static int apply(unsigned t, unsigned scale, unsigned root, unsigned
 MAQAM_SMALL static int retune(unsigned t, unsigned scale, unsigned root)
 {
     unsigned same = maqam_track_scale(t) == scale && maqam_track_root(t) == root;
+    if (!same) maqam_chord_forget(t);
     return apply(t, scale, root, !same);
 }
 MAQAM_SMALL static int ok_pick(unsigned scale, unsigned root) { return scale < maqam_scale_count() && root < 24; }
@@ -163,4 +164,9 @@ MAQAM_SMALL void maqam_refresh(void)
             st.tscale[i] = old.tscale[i];
             st.troot[i] = old.troot[i];
         }
+    for (unsigned i = 0; i < GROOVE_TRACKS; ++i) {   /* a track whose scale or root changed forgets its last chord */
+        unsigned o = old.over >> i & 1U;
+        if ((o ? old.tscale[i] : old.scale) != maqam_track_scale(i) ||
+            (o ? old.troot[i] : old.root) != maqam_track_root(i)) maqam_chord_forget(i);
+    }
 }

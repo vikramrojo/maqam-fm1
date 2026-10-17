@@ -120,9 +120,10 @@ unsigned maqam_chord_get(unsigned track, unsigned field); /* 0 for a bad track o
 int maqam_chord_set(unsigned track, unsigned field, unsigned value); /* 0 ok, <0 bad argument */
 /* The chord (notes ascending, 0..127, at most 8; count returned, 0 = none) the track's type, inversion and voicing
    give for the played key note: SNAP's target degree when `note` carries none (desc = going down). Pure but for
-   AUTO, which reads the track's last chord. 0 for drum, CUSTOM and chromatic tracks. Chord mode (MODE) is not read. */
+   the drones' AUTO pedal, which reads the track's last drone chord (AUTO acts as ROOT on the stacked types). 0 for drum, CUSTOM and chromatic tracks. Chord mode (MODE) is not read. */
 unsigned maqam_chord_notes(unsigned track, unsigned note, unsigned desc, uint8_t out[8]);
-void maqam_chord_commit(unsigned track, const uint8_t *notes, unsigned n);  /* the track's last chord (AUTO's reference) */
+void maqam_chord_commit(unsigned track, const uint8_t *notes, unsigned n);  /* the track's last chord (the drones' AUTO pedal reference) */
+void maqam_chord_forget(unsigned track);        /* forget the track's last chord and pedal (its scale or root changed) */
 unsigned maqam_chord_last(unsigned track, uint8_t out[8]);                  /* count; 0 before the first chord */
 /* Key ownership (27 keys). start: if the track has chord mode on and a chord, key owns it (nothing posted yet;
    the chord becomes the track's last chord) and the note count is returned, else 0 and the key owns nothing.
@@ -139,9 +140,8 @@ void maqam_chord_sync(const uint8_t key_note[27]);
 unsigned maqam_chord_holders(unsigned track, unsigned note, unsigned skip);
 /* Interval name (SUB MIN NEU MAJ SUP + '-' / '+' fifth + '7', DOM7, 5TH 8VA 5+8 SUS2 SUS4 ADD9, +NNN drones, SINGLE, CUST) of
    ascending notes from their tuned pitches (the track's alt table when alt), rounded to 50 c; out holds 8 bytes.
-   step_chord_name: the same for the chord on a step of a melodic track. */
+   Drone names (+NNN) are measured from the track's tonic. Shown on the CHORD page only. */
 void maqam_chord_name(unsigned track, unsigned alt, const uint8_t *notes, unsigned n, char out[8]);
-void maqam_step_chord_name(unsigned track, unsigned step, char out[8]);
 /* Trailer bytes [5..6]: save writes them; load checks them (and applies them to every track when apply): 0 ok, -1 invalid. */
 void maqam_chords_save(uint8_t t[2]);
 int maqam_chords_load(const uint8_t t[2], unsigned apply);
@@ -168,8 +168,6 @@ struct maqam_view {
     uint8_t custom, tuned;
 };
 void maqam_page_next(void);                      /* SCL on the page: the next subpage, wrapping; the page is reopened on the last one */
-/* The overview / step header tag ("Ed RAST"); 0 for drums and WEST chromatic, "CUST" for a custom table. 12 bytes. */
-unsigned maqam_header_tag(unsigned track, char out[12]);
 /* Encoders as the panel gives them (0 selects the track and is handled by the caller); key_down: panel keys
    that went down (TRACK: the first selects the alt key; the keys play as on any page). */
 void maqam_page_control(unsigned track, const int16_t enc[7], uint32_t key_down);

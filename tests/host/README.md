@@ -154,9 +154,9 @@ hint without moving the root); page 2 (override on/off, root, scale, CUSTOM kept
 untouched); page 3 (project and track layouts); page 4 (key pick by panel key, which also sounds, +/-1 and +/-10 cents with clamp, the cents
 readout and 24-tone name, reset, other tracks and drums untouched); a stored over-size sample bank, where a refused
 save shows `REDUCE SAMPLE BANK` on the scale page and a good save clears it (also for a direct
-`groove_project_save_slot` call, the SysEx path); the DX7-style frame (the header and hint rows hash identically across SCL cycling, the section row changes); the header scale tag (`maqam_header_tag`: `Ed Rast`, hidden for CHR and drums, `CUST`, painted and repainted on the overview and step pages); undo (HOME+SAVE) re-derives the track labels from the restored tables; and painted pixels (title, subtitle,
+`groove_project_save_slot` call, the SysEx path); the DX7-style frame (the header and hint rows hash identically across SCL cycling, the section row changes); undo (HOME+SAVE) re-derives the track labels from the restored tables; and painted pixels (title, subtitle,
 home hint, alt readout; the subtitle repaints on a scale change). It writes 2x PNG screenshots of the real
-framebuffer (`sim_pixels`) to `build/host/` (`scale_*.png`, `steps_alt_mark.png`, `scale_overview_tag.png`, `project_reduce_bank.png`).
+framebuffer (`sim_pixels`) to `build/host/` (`scale_*.png`, `steps_alt_mark.png`, `project_reduce_bank.png`).
 
 ## Continuous integration
 
@@ -177,6 +177,6 @@ PNGs `scale_row_bayati`, `scale_row_rast`, `scale_alt_bayati` and `steps_bb4` in
 
 `tests/host/scale_shots.c` renders edge cases of the scale pages (Rast up/down, Hijaz, Sikah on Ed, Suznak's
 9 degrees, pentatonic, chromatic, Bb major, a fallback root, quarter-tone roots, PSYCH, JINS, own-scale track,
-CUSTOM, drums, TRACK page with FOLLOW/OWN layouts, alt extremes, REDUCE SAMPLE BANK, the overview header tag, the CHORD page (Rast TRIAD, 7TH AUTO, DRN over A in Hüseyni), the stock DX7 scaling and curves screens for comparison) to `build/host/shots/*.png`. It is not a test, so
+CUSTOM, drums, TRACK page with FOLLOW/OWN layouts, alt extremes, REDUCE SAMPLE BANK, the CHORD page (Rast TRIAD, 7TH AUTO, DRN over A in Hüseyni), the stock DX7 scaling and curves screens for comparison) to `build/host/shots/*.png`. It is not a test, so
 `build.sh` skips it; build it with the same command as a test, adding `tests/host/scale_shots.c` and
 `-I tests/host`, then run `build/host/scale_shots` from the repository root.
