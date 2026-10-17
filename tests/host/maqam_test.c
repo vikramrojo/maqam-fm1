@@ -99,9 +99,7 @@ static void cross_check(void)
                 int8_t want[12] = {0}, m[12];
                 for (unsigned sl = 0; sl < 24; ++sl) {
                     if (ref[sl] < 0) continue;
-                    int d = t ? wrap((int)root * 500 + SCALES[s].cents_x10[sl] - ref[sl] * 1000, 12000)
-                              : wrap(((int)root + (int)sl) * 50 - ref[sl] * 100, 1200) * 10;
-                    d = d >= 0 ? (d + 5) / 10 : -((-d + 5) / 10);
+                    int d = wrap((int)root * 50 + (t ? scale_cents(&SCALES[s], sl) : (int)sl * 50) - ref[sl] * 100, 1200);
                     want[ref[sl]] = (int8_t)d;
                 }
                 if (maqam_main(s, root, t, m) == 0) { ++fits; expect(m, want); } else CHECK(!"fits");
@@ -118,6 +116,15 @@ static void cross_check(void)
     for (unsigned s = 0; s < 24; ++s)
         if (k1[s] >= 0) CHECK(m[k1[s]] == wrap(((int)s + 1) * 50 - k1[s] * 100, 1200));
     CHECK(k1[7] == E && k1[0] == CS && k1[21] == B);     /* matches the generator: 7->E, 0->C#, 21->B */
+}
+
+/* The packed record has no padding: 47 bytes, and the accessors read the little-endian masks. */
+static void packing(void)
+{
+    CHECK(sizeof(scale_def_t) == 47 && sizeof SCALES == 47U * NSCALES);
+    unsigned rs = find("RAST");
+    CHECK(scale_up(&SCALES[rs]) == 0x244491u && scale_down(&SCALES[rs]) == 0x144491u);
+    CHECK(scale_cents(&SCALES[rs], 7) == 357 && scale_cents(&SCALES[rs], 21) == 1059);   /* 356.9 c, 1058.8 c */
 }
 
 /* ---- engine fixture ---- */
@@ -354,6 +361,7 @@ static void matching(void)
 int main(void)
 {
     rast();
+    packing();
     cross_check();
     state_push();
     undo();

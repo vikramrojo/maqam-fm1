@@ -9,12 +9,12 @@
 #define HF MAQAM_HF
 static const char *const slot_names[24] = {"C", "C+", "C#", "D" HF, "D", "D+", "D#", "E" HF, "E", "F" HF, "F", "F+",
                                            "F#", "G" HF, "G", "G+", "G#", "A" HF, "A", "A+", "A#", "B" HF, "B", "C" HF};
-const char *maqam_slot_name(unsigned slot) { return slot_names[slot % 24U]; }
+MAQAM_SMALL const char *maqam_slot_name(unsigned slot) { return slot_names[slot % 24U]; }
 
-static int fdiv(int a, int b) { int q = a / b; return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q; }
+MAQAM_SMALL static int fdiv(int a, int b) { int q = a / b; return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q; }
 
 /* The signed octave number, as the stock names write it (note 60 = C4, note 0 = C-1). */
-static char *put_int(char *p, int v)
+MAQAM_SMALL static char *put_int(char *p, int v)
 {
     char d[12];
     unsigned n = 0, u = v < 0 ? (unsigned)-v : (unsigned)v;
@@ -23,7 +23,7 @@ static char *put_int(char *p, int v)
     while (n) *p++ = d[--n];
     return p;
 }
-void maqam_name24(unsigned note, int cents, char out[12])
+MAQAM_SMALL void maqam_name24(unsigned note, int cents, char out[12])
 {
     /* Quarter tones above C-1; the sum is rounded (ties up) to the nearest 50 c. */
     int c = (int)note * 100 + cents, q = fdiv(c + 25, 50);
@@ -34,7 +34,7 @@ void maqam_name24(unsigned note, int cents, char out[12])
     p = put_int(p, octave);
     *p = 0;
 }
-void maqam_note_name(unsigned track, unsigned note, unsigned alt, char out[12])
+MAQAM_SMALL void maqam_note_name(unsigned track, unsigned note, unsigned alt, char out[12])
 {
     int cents = 0;
     if (maqam_melodic(track)) {

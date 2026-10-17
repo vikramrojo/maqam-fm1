@@ -7,6 +7,12 @@
 /* Scales are library indices (scales.h, frozen). Roots are quarter tones above C, 0..23. Control task only. */
 enum { MAQAM_CUSTOM = 0xFF, MAQAM_TRAILER_BYTES = 8, MAQAM_TRAILER_TAG = 0xA1 };
 
+/* Control-path code (every function in pages.c state.c keys.c names.c tuning.c engine.c; none runs in the audio
+   task) is built for size: the firmware flags are fixed, so the attribute does it. clang: minsize implies optsize. */
+#ifndef MAQAM_SMALL /* a build may override it (e.g. -DMAQAM_SMALL= to compare sizes) */
+#define MAQAM_SMALL __attribute__((minsize))
+#endif
+
 /* The half-flat letter in 24-tone names: screen.c draws this code as a lowercase d (see names.c). */
 #define MAQAM_HF "\x1a"
 
