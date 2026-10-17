@@ -88,13 +88,13 @@ Spelling is computed from the scale and root every time; nothing is stored. Of t
 
 ## 4. The scale pages
 
-Open them with **SCL**: they come up on the page you used last. There are two pages, **SCALE** (1/2) and **TRACK** (2/2). **SCL** again switches to the other one; **ALGO** does the same, both ways (`pages_test` "navigation"). The SCL button lights while you are there. **HOME** leaves, as on every page; **SAVE** opens the project page and returns here after a good save. The stock FM scaling screens (DX7 level and rate scaling, or the pitch page on other engines) are on **HOME + SCL** (hold HOME, press SCL): on that screen SCL keeps toggling level and rate as in stock, and HOME + SCL again goes back to the scale pages on the page you used last. The **keys play** on both pages as on the main pages; on the TRACK page a key also selects that key for alt editing. The root is set only with K1 on the SCALE page.
+Open them with **SCL**: they come up on the page you used last. There are three pages, **SCALE** (1/3), **TRACK** (2/3) and **CHORD** (3/3). **SCL** again moves to the next one, wrapping; **ALGO** steps through them both ways (`pages_test` "navigation"). The SCL button lights while you are there. **HOME** leaves, as on every page; **SAVE** opens the project page and returns here after a good save. The stock FM scaling screens (DX7 level and rate scaling, or the pitch page on other engines) are on **HOME + SCL** (hold HOME, press SCL): on that screen SCL keeps toggling level and rate as in stock, and HOME + SCL again goes back to the scale pages on the page you used last. The **keys play** on every page as on the main pages; on the TRACK page a key also selects that key for alt editing. The root is set only with K1 on the SCALE page.
 
-The pages use the same frame as the DX7 edit pages: the stock header (tempo, transport, mode) stays, and a small row under it reads `T1 DX7  SCALE  1/2` or `T1 DX7  TRACK  2/2` (track, source, page name, position). The hint row reads `SCL PAGE  SELECT TRACK  HOME BACK`. Changing page redraws only the page name, the position, the content and the knobs (`pages_test` "frame").
+The pages use the same frame as the DX7 edit pages: the stock header (tempo, transport, mode) stays, and a small row under it reads `T1 DX7  SCALE  1/3`, `T1 DX7  TRACK  2/3` or `T1 DX7  CHORD  3/3` (track, source, page name, position). The hint row reads `SCL PAGE  SELECT TRACK  HOME BACK`. Changing page redraws only the page name, the position, the content and the knobs (`pages_test` "frame").
 
 **Scope.** Each melodic track either **follows the project** scale or has **its own** scale. Edits go to the scope of the selected track: on a track that follows, root, set, scale and the key layout edit the project's (so every following track changes); on a track with its own scale they edit only that track. **Tuning** (EQUAL/TRAD) is always the project's. **SELECT** picks the track.
 
-Under the section row both pages show the subtitle of the selected track:
+Under the section row the pages show the subtitle of the selected track:
 
 `Ed arab sikah^ trad` (`pages_test` "subtitle after K1/K2/K3") = root Ed (E half-flat), set ARAB, scale Sikah, TRAD.
 
@@ -103,7 +103,7 @@ Under the section row both pages show the subtitle of the selected track:
 - The **home hint** `home: Ed` shows the scale's traditional tonic for non-Western scales. It is a hint only: choosing a scale never moves the root. To play Sikah at home, set the root to E half-flat with K1.
 - If the last project save was refused because a sample bank leaves no room for the tuning tables, the pages show **SAVE FAILED: REDUCE SAMPLE BANK** (section 6).
 
-### Page 1/2: SCALE
+### Page 1/3: SCALE
 
 | Control | Does |
 |---|---|
@@ -118,7 +118,7 @@ The page shows a **degree row**: only the scale's degrees (both forms together),
 
 **CUSTOM**: a track whose table matches no scale (edited by hand, or by another tool) shows `custom` and `--` on the root and set knobs; its table is kept exactly as it is. It counts as having its own table, so turning K1-K3 replaces it with a scale (only that track), and FOLLOW on the TRACK page replaces it with the project's scale (`pages_test` "custom and drums").
 
-### Page 2/2: TRACK
+### Page 2/3: TRACK
 
 | Control | Does |
 |---|---|
@@ -133,11 +133,43 @@ The strip keeps all 12 keys, because an alt pitch can be set on any key: each sh
 
 The layout scenarios are in `pages_test` "layouts" and `keys_test` ("a track with its own scale has its own layout").
 
+### Page 3/3: CHORD
+
+| Control | Does |
+|---|---|
+| **K1 MODE** | chord mode OFF or ON for the selected track |
+| **K2 TYPE** | `TRI` 1-3-5, `7TH` 1-3-5-7, `SUS2` 1-2-5, `SUS4` 1-4-5, `5TH` 1-5, `5+8` 1-5-8, `JINS` 1-2-3-4 |
+| **K3 INV** | ROOT, 1ST, 2ND, 3RD, AUTO |
+| **K4 VOICE** | `CLOS`, OPEN, BASS |
+
+All four are the selected track's own. The page shows the last chord played on the track, spelled in the large font (`C Ed G`), with its interval name under it (`NEU`) (`pages_test` "chord page"). See section 4b for how chord mode plays.
+
 ---
 
 ### The scale tag
 
 On the overview and step pages the header shows the selected track's scale at the right, under the mode box: the spelled root and the scale name cut to four characters, `Ed RAST` (`pages_test` "Rast on Ed"). It is hidden for WEST chromatic and for drum tracks, and a hand-edited table shows `CUST`.
+
+## 4b. Chord mode
+
+With chord mode on (CHORD page, K1), a key plays the chord **built from the track's scale on that key's degree**, like a Polyend chord mode: the chord's quality comes from the scale. Keys keep their own pitch; a key that is not a degree plays the chord of the degree it snaps to (as SNAP). Drum tracks, CUSTOM tables and WEST chromatic play single notes.
+
+- **WEST natural minor on A, TRIAD:** A, B, C, D, E, F, G play A-C-E, B-D-F, C-E-G, D-F-A, E-G-B, F-A-C, G-B-D: min, dim, maj, min, min, maj, maj (`chords_test` "types").
+- **Rast on C, TRIAD:** C plays C Ed G, a neutral triad; the A# key (B flat, descending form only) plays B flat - D - F, stacked in the descending form.
+- **Bayati on D, JINS:** D plays D Ed F G, the lower jins as a cluster. **Pentatonic** scales stack within their own degrees: C pentatonic TRIAD is C E A.
+- The degrees are counted in the ascending form unless the degree belongs only to the descending form. Every type works on every scale and root (`chords_test` "exhaustive").
+
+**Inversions (K3).** 1ST, 2ND, 3RD move the lowest one, two or three notes up an octave (C major 1ST = E G C). **AUTO** picks the inversion and octave closest to the previous chord on the track, so progressions move smoothly: C then F plays C4 F4 A4 (`chords_test` "voicing").
+
+**Voicing (K4).** OPEN moves the second note up an octave; BASS adds the lowest note an octave below (C4 triad + C3). A chord has at most 8 notes.
+
+**Holding several keys.** A note shared by two held chords keeps sounding until both are released (C and A held in C major, release C: A-C-E keeps sounding) (`chords_test` "overlap"). OCT held makes the whole chord alt (`chords_test` "alt and drums").
+
+**Recording.** Chord-mode playing records each chord on its step through the engine's own chord recording (`chords_test` "recording"). Chords use the project's 16-slot chord table; identical shapes share a slot. When the table is full the engine shows `CHORD LIMIT - LAST NOTES KEPT`: the step keeps the notes that fit, usually just the first note of the chord. Use fewer chord types per project if this happens. A recorded chord keeps its notes when the scale changes later; its name follows the new tuning.
+
+**Names.** Chords are named from the cents they sound, rounded to quarter tones, on the CHORD page and on the step page's CHORD knob: triads `SUB` `MIN` `NEU` `MAJ` `SUP` (by the third; `-` for a 600/650 c fifth, `+` for 750/800 c), sevenths `NEU7`, `MAJ7`, `DOM7` ..., and `5TH`, `8VA`, `5+8`, `SUS2`, `SUS4`, `ADD9`, `JINS`, else `CUST`. The same C-E-G stack reads `NEU` on a Rast track and `MAJ` in WEST major; inversions keep their name (`chords_test` "names").
+
+**Saving.** Each track's chord-mode on/off is saved. Only one set of type, inversion and voicing fits in the project: the lowest-numbered chord-mode track's. After loading, every track has that set (`maqam_test` "chord trailer").
 
 ## 5. Recipes
 
