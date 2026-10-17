@@ -72,6 +72,11 @@ int maqam_set_layout(unsigned track, int layout); /* -1 = the project default (a
 unsigned maqam_key_note(unsigned track, unsigned key, int octave, unsigned descending);
 /* A key goes down: updates the direction (lower than the previous key within 1 s = descending). */
 unsigned maqam_key_press(unsigned track, unsigned key, int octave, uint32_t now);
+/* The track's key assignment (key[slot] = pitch class, -1 unused; scale/root out), or NULL for drum, CUSTOM and
+   chromatic tracks (they have no degrees). The pointer is valid until the next call. */
+const int8_t *maqam_keys_assignment(unsigned track, unsigned *scale, unsigned *root);
+/* `note` itself, or the nearest degree key's note below (desc) / above, as SNAP does; k from maqam_keys_assignment. */
+unsigned maqam_snap(const int8_t *k, unsigned note, unsigned desc);
 /* Bit k set: key k carries a degree of either form. 0 for drum, CUSTOM and chromatic tracks. */
 uint32_t maqam_key_lights(unsigned track);
 /* OCT buttons. oct_held/oct_pressed: bit 0 OCT-, bit 1 OCT+. active: not a step page. key_down: a key went
@@ -102,6 +107,36 @@ void maqam_note_name(unsigned track, unsigned note, unsigned alt, char out[12]);
    octave, out holds 4 bytes; returns 1 if spelled, 0 if it is a fixed 24 name. */
 void maqam_name_scale(unsigned scale, unsigned root, unsigned note, int cents, char out[12]);
 unsigned maqam_degree_name(unsigned scale, unsigned root, unsigned q, char out[4]);
+
+/* chords.c: chord mode (control task only). Settings are per track, in RAM. fields: MODE 0/1, TYPE TRIAD 7TH SUS2
+   SUS4 5TH 5+8 JINS = 0..6, INV ROOT 1ST 2ND 3RD AUTO = 0..4, VOICE CLOSE OPEN BASS = 0..2. */
+enum { MAQAM_CH_MODE, MAQAM_CH_TYPE, MAQAM_CH_INV, MAQAM_CH_VOICE, MAQAM_CH_FIELDS };
+enum { MAQAM_CHORD_TRIAD, MAQAM_CHORD_7TH, MAQAM_CHORD_SUS2, MAQAM_CHORD_SUS4, MAQAM_CHORD_5TH, MAQAM_CHORD_5P8,
+       MAQAM_CHORD_JINS, MAQAM_CHORD_TYPES };
+enum { MAQAM_INV_ROOT, MAQAM_INV_1ST, MAQAM_INV_2ND, MAQAM_INV_3RD, MAQAM_INV_AUTO };
+enum { MAQAM_VOICE_CLOSE, MAQAM_VOICE_OPEN, MAQAM_VOICE_BASS };
+void maqam_chords_reset(void);                            /* settings, last chords and key ownership to defaults (not sounding notes) */
+unsigned maqam_chord_get(unsigned track, unsigned field); /* 0 for a bad track or field */
+int maqam_chord_set(unsigned track, unsigned field, unsigned value); /* 0 ok, <0 bad argument */
+/* The chord (notes ascending, 0..127, at most 8; count returned, 0 = none) the track's type, inversion and voicing
+   give for the played key note: SNAP's target degree when `note` carries none (desc = going down). Pure but for
+   AUTO, which reads the track's last chord. 0 for drum, CUSTOM and chromatic tracks. Chord mode (MODE) is not read. */
+unsigned maqam_chord_notes(unsigned track, unsigned note, unsigned desc, uint8_t out[8]);
+void maqam_chord_commit(unsigned track, const uint8_t *notes, unsigned n);  /* the track's last chord (AUTO's reference) */
+unsigned maqam_chord_last(unsigned track, uint8_t out[8]);                  /* count; 0 before the first chord */
+/* Key ownership (27 keys). start: if the track has chord mode on and a chord, key owns it (nothing posted yet;
+   the chord becomes the track's last chord) and the note count is returned, else 0 and the key owns nothing.
+   owned: key owns a chord. play posts the pending note-ons lowest first, stop the note-offs highest first, both
+   through out(track, note, on) (1 = done, 0 = could not post: call again, it resumes). A note another key still
+   holds is struck again on a press (so a recording take sees it) and gets its note-off only from its last holder.
+   sync drops the keys whose key_note is 0xff (the app lost them). holders: keys other than `skip` (27 = none)
+   holding `note` on `track`. */
+unsigned maqam_chord_start(unsigned key, unsigned track, unsigned note, unsigned desc);
+unsigned maqam_chord_owned(unsigned key);
+int maqam_chord_play(unsigned key, int (*out)(unsigned track, unsigned note, unsigned on));
+int maqam_chord_stop(unsigned key, int (*out)(unsigned track, unsigned note, unsigned on));
+void maqam_chord_sync(const uint8_t key_note[27]);
+unsigned maqam_chord_holders(unsigned track, unsigned note, unsigned skip);
 
 /* pages.c: the scale pages (control task only). The screen hooks in screen.c only open the page, pass the
    encoders/keys in and draw this view; every value is read back from the maqam_* state. */

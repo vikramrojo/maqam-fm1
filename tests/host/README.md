@@ -121,6 +121,17 @@ that the root never moves keys, the layout default in the trailer, the OCT alt
 gesture (measured E at the main versus alt pitch, recorded step with the alt bit and its playback),
 double-tap octave (150 ms yes, slow no, key between no, clamp), drum tracks unchanged, and key lights.
 
+## Chords test
+
+`chords_test` (run from the repository root) covers chord mode (`app/maqam/chords.c`): the chord notes for WEST MIN
+on A (all seven degrees), Rast TRIAD on C, the descending-only Bb key, Bayati JINS on D, pentatonic TRIAD, snapping,
+all seven types, inversions (3RD clamps), AUTO (C then F = C4 F4 A4), OPEN and BASS, and an exhaustive pass over all
+73 scales x 24 roots x 7 types x every degree key (ascending, in range, on keys that carry a degree) and over every
+inversion/voicing (at most 8 notes, in range). Through the real `screen.c` key loop it checks that a chord-mode key
+records its chord on the step, that overlapping chords keep shared notes until the last holder releases (Goertzel
+energy of the audio, and `maqam_chord_holders`), OCT alt on every chord note (`GROOVE_STEP_ALT`), the drum track
+unaffected, and a full 16-slot chord table (edit error 2).
+
 ## Names test
 
 `names_test` (run from the repository root) covers `app/maqam/names.c`: `Ed4` for E at -43, rounding to the
