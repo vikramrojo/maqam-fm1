@@ -164,9 +164,4 @@ MAQAM_SMALL void maqam_refresh(void)
             st.tscale[i] = old.tscale[i];
             st.troot[i] = old.troot[i];
         }
-    for (unsigned i = 0; i < GROOVE_TRACKS; ++i) {   /* a track whose scale or root changed forgets its last chord */
-        unsigned o = old.over >> i & 1U;
-        if ((o ? old.tscale[i] : old.scale) != maqam_track_scale(i) ||
-            (o ? old.troot[i] : old.root) != maqam_track_root(i)) maqam_chord_forget(i);
-    }
 }

@@ -12,8 +12,8 @@
 /* The screen font is uppercase-only, so half-flat is not written as a 'd': MAQAM_HF (0x1a) is a lowercase d
    glyph that only names use (a real 'd' would be drawn as D, which reads as a separate note). */
 #define HF MAQAM_HF
-static const char *const slot_names[24] = {"C", "C+", "C#", "D" HF, "D", "D+", "D#", "E" HF, "E", "F" HF, "F", "F+",
-                                           "F#", "G" HF, "G", "G+", "G#", "A" HF, "A", "A+", "A#", "B" HF, "B", "C" HF};
+static const char slot_names[24][3] = {"C", "C+", "C#", "D" HF, "D", "D+", "D#", "E" HF, "E", "F" HF, "F", "F+",
+                                    "F#", "G" HF, "G", "G+", "G#", "A" HF, "A", "A+", "A#", "B" HF, "B", "C" HF};
 MAQAM_SMALL unsigned maqam_num(char out[12], int v, unsigned plus)
 {
     unsigned n = 0, u = v < 0 ? 0U - (unsigned)v : (unsigned)v;

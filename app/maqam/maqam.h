@@ -157,7 +157,7 @@ struct maqam_view {
     char status[28];                 /* "TRACK 3  FOLLOWS PROJECT" / OWN SCALE / CUSTOM TABLE / DRUMS - NOT TUNED */
     char note[16];                   /* "home: D" hint ("" for WEST scales) */
     char line[2][24];                /* TRACK page only: "ALT -100 Eb4" (large), "MAIN -47 Ed4" */
-    const char *knob[4][2];          /* label, value: static strings, or rname / atext below; NULL label = no knob */
+    const char *knob[4][2];          /* label, value: static strings, or rname / atext below; always 4 */
     char rname[4], atext[12];        /* the tonic's name; the alt cents with a sign ("+0") */
     char warn[36];                   /* "REDUCE SAMPLE BANK" when the last save could not store tuning */
     int8_t cents[12];                /* the cents under each cell: main table on SCALE, alt on TRACK */
