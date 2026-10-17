@@ -69,7 +69,7 @@ int main(void)
     enc(0, -7);
 
     /* TRACK page: following, own with its own layout, CUSTOM, drums */
-    project("BAYAT", 4, 1);
+    project("P.HUS", 18, 1);
     enc(1, 1); ms(300);
     snap("17_track_follow");
     enc(2, 1); enc(3, 1); ms(300);
@@ -91,7 +91,7 @@ int main(void)
     snap("21_track_drums");
 
     /* TRACK page: extremes on adjacent keys and an out-of-scale flat */
-    project("BAYAT", 4, 1);
+    project("P.HUS", 18, 1);
     enc(1, 1); ms(100);
     maqam_set_alt(0, 4, -100);                       /* E key: Eb */
     maqam_set_alt(0, 5, 127);
@@ -130,7 +130,7 @@ int main(void)
     snap("25_dx7_scaling_stock");
     btn(SCL); ms(400);
     snap("26_dx7_curves_stock");
-    /* the CHORD page: Rast TRIAD on C, 7TH with AUTO (C then F), a Bayati jins on D */
+    /* the CHORD page: Rast TRIAD on C, 7TH with AUTO (C then F), DRN over A in Huseyni */
     project("RAST", 0, 1);
     enc(1, 2); enc(2, 1); ms(100);                   /* ALGO: CHORD page; K1 MODE ON */
     key(7); ms(400);
@@ -138,10 +138,10 @@ int main(void)
     enc(3, 1); for (unsigned i = 0; i < 4; ++i) enc(4, 1); ms(100);   /* 7TH, AUTO */
     key(7); key(12); ms(400);
     snap("28_chord_7th_auto");
-    project("BAYAT", 4, 1);
+    project("P.HUS", 18, 1);
     enc(1, 2); enc(2, 1); ms(100);
-    for (unsigned i = 0; i < 6; ++i) enc(3, 1);      /* JINS */
-    key(9); ms(400);
-    snap("29_chord_bayati_jins");
+    for (unsigned i = 0; i < 6; ++i) enc(3, 1);      /* DRN */
+    key(18); ms(400);   /* the B key (B-half-flat) */
+    snap("29_chord_huseyni_drone");
     return failures != 0;
 }

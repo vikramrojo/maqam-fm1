@@ -8,12 +8,13 @@
 enum { OFFSETS = 4, END = 0xFF, NOTES = 8, KEYS = 27 };
 
 static uint8_t set[GROOVE_TRACKS][MAQAM_CH_FIELDS];
-static struct { uint8_t n, note[NOTES]; } last[GROOVE_TRACKS];
+static struct { uint8_t n, drone, note[NOTES]; int16_t pedal; } last[GROOVE_TRACKS];   /* pedal: the last drone chord's */
+static int16_t cur[GROOVE_TRACKS];   /* the pedal of the drone chord maqam_chord_notes built last */
 static struct { uint8_t track, n, p, note[NOTES]; } own[KEYS];   /* notes [0, p) are posted */
 
-/* Steps through the form's degrees from the played one (0 = root). */
-static const uint8_t SHAPE[MAQAM_CHORD_TYPES][OFFSETS] = {
-    {0, 2, 4, END}, {0, 2, 4, 6}, {0, 1, 4, END}, {0, 3, 4, END}, {0, 4, END, END}, {0, 4, 7, END}, {0, 1, 2, 3}};
+/* Steps through the form's degrees from the played one (0 = root); the drone types have none. */
+static const uint8_t SHAPE[MAQAM_CHORD_DRN][OFFSETS] = {
+    {0, 2, 4, END}, {0, 2, 4, 6}, {0, 1, 4, END}, {0, 3, 4, END}, {0, 4, END, END}, {0, 4, 7, END}};
 static const uint8_t LIMIT[MAQAM_CH_FIELDS] = {1, MAQAM_CHORD_TYPES - 1, MAQAM_INV_AUTO, MAQAM_VOICE_BASS};
 
 MAQAM_SMALL void maqam_chords_reset(void)
@@ -37,6 +38,7 @@ MAQAM_SMALL void maqam_chord_commit(unsigned track, const uint8_t *notes, unsign
     if (track >= GROOVE_TRACKS || n > NOTES) return;
     last[track].n = (uint8_t)n;
     memcpy(last[track].note, notes, n);
+    if (set[track][MAQAM_CH_TYPE] >= MAQAM_CHORD_DRN) { last[track].drone = 1; last[track].pedal = cur[track]; }
 }
 MAQAM_SMALL unsigned maqam_chord_last(unsigned track, uint8_t out[8])
 {
@@ -46,14 +48,14 @@ MAQAM_SMALL unsigned maqam_chord_last(unsigned track, uint8_t out[8])
 }
 
 /* Interval names (M6): the notes' tuned pitches in quarter tones above the lowest, against fixed shapes. */
-static const char NAMES[][5] = {"5TH", "8VA", "5+8", "SUS2", "SUS4", "ADD9", "JINS", "SUB", "MIN", "NEU", "MAJ", "SUP", "CUST", "DOM"};
+static const char NAMES[][5] = {"5TH", "8VA", "5+8", "SUS2", "SUS4", "ADD9", "SUB", "MIN", "NEU", "MAJ", "SUP", "CUST", "DOM"};
 /* name << 29 | one bit per note above the lowest, at its quarter tones */
 static const uint32_t FIXED[8] = {0x00004000, 0x00000400, 0x21000000, 0x41004000, 0x41000400, 0x60004010, 0x80004400, 0xB0004100};
 MAQAM_SMALL void maqam_chord_name(unsigned track, unsigned alt, const uint8_t *notes, unsigned n, char out[8])
 {
     struct groove_tuning g;
     int base = 0, hi = 0;
-    unsigned id = 12, m = 0, all = 0;   /* m: the shape above the lowest note; all: the pitch classes mod an octave (24) */
+    unsigned id = 11, m = 0, all = 0, h1 = 0;   /* m: the shape above the lowest note; all: the pitch classes mod an octave (24) */
     if (n < 2 || n > NOTES) { strcpy(out, "SINGLE"); return; }
     maqam_engine_get(track, &g);
     for (unsigned i = 0; i < n; ++i) {
@@ -61,11 +63,11 @@ MAQAM_SMALL void maqam_chord_name(unsigned track, unsigned alt, const uint8_t *n
         if (!i) base = p;
         hi = (p - base + 25) / 50;
         all |= 1U << (unsigned)hi % 24U;
+        if (i == 1) h1 = (unsigned)hi;
         if (i) m |= 1U << (hi < 29 ? hi : 0);
     }
     for (unsigned i = 0; i < 8; ++i)
         if (!((FIXED[i] ^ m) << 3)) { id = FIXED[i] >> 29; goto done; }
-    if (n == 4 && hi <= 10) { id = 6; goto done; }
     for (unsigned d = 0; d < 5; ++d) {    /* the fifth nearest 700 c first: E G C is C major, not E minor-plus */
         unsigned h = 14 + (d & 1 ? (d + 1) / 2 : -(d / 2));
         for (unsigned k = 0; k < 24; ++k) {   /* each pitch class as the root: third 5-9, fifth 12-16, seventh 19-22 (18 = none) */
@@ -74,13 +76,17 @@ MAQAM_SMALL void maqam_chord_name(unsigned track, unsigned alt, const uint8_t *n
                 for (unsigned v = 18; v < 23; ++v)
                     if (all >> k & 1U && r == (1U | 1U << t | 1U << h | (v > 18 ? 1U << v : 0))) {
                         char *q = out + 3;
-                        memcpy(out, NAMES[t == 8 && v == 20 ? 13 : t + 2], 3);
+                        memcpy(out, NAMES[t == 8 && v == 20 ? 12 : t + 1], 3);
                         if (h != 14) *q++ = h < 14 ? '-' : '+';
                         if (v > 18) *q++ = '7';
                         *q = 0;
                         return;
                     }
         }
+    }
+    if (n == 2 || (n == 3 && h1 == 14)) {   /* a drone: the top note over the lowest, within an octave */
+        maqam_num(out, hi % 24 * 50, 1);
+        return;
     }
 done:
     strcpy(out, NAMES[id]);
@@ -110,7 +116,7 @@ MAQAM_SMALL void maqam_chords_save(uint8_t t[2])
 MAQAM_SMALL int maqam_chords_load(const uint8_t t[2], unsigned apply)
 {
     unsigned b = t[1];
-    if ((b & 7U) > MAQAM_CHORD_JINS || (b >> 3 & 7U) > MAQAM_INV_AUTO || b >> 6 > MAQAM_VOICE_BASS) return -1;
+    if ((b >> 3 & 7U) > MAQAM_INV_AUTO || b >> 6 > MAQAM_VOICE_BASS) return -1;
     for (unsigned k = 0; k < GROOVE_TRACKS && apply; ++k) {
         set[k][0] = t[0] >> k & 1U;
         set[k][1] = b & 7U;
@@ -136,10 +142,22 @@ MAQAM_SMALL static unsigned stack(unsigned track, unsigned note, unsigned desc, 
     for (unsigned i = 0; i < 24; ++i)
         if (key[i] == (int)(note % 12U)) deg = i;
     if (deg == 24) return 0;
+    unsigned drone = set[track][MAQAM_CH_TYPE] >= MAQAM_CHORD_DRN;
     uint32_t form = scale_up(&SCALES[scale]);
-    if (!(form >> deg & 1U)) form = scale_down(&SCALES[scale]);   /* a descending-only degree: its form */
+    if (!drone && !(form >> deg & 1U)) form = scale_down(&SCALES[scale]);   /* a descending-only degree: its form */
     for (unsigned i = 0; i < 24; ++i)
         if (form >> i & 1U) { if (i == deg) idx = len; slot[len++] = (uint8_t)i; }
+    if (drone) {   /* the tonic's key as the pedal, DRN5's fifth above it, the played note on top */
+        int p = (int)note - (int)maqam_mod((int)note - key[0], 12), q = last[track].pedal;
+        unsigned inv = set[track][MAQAM_CH_INV];
+        if (inv != MAQAM_INV_AUTO || !(last[track].drone && q < (int)note)) q = p + (inv > MAQAM_INV_1ST && inv != MAQAM_INV_AUTO ? 12 : inv == MAQAM_INV_1ST && p != (int)note ? 0 : -12);
+        cur[track] = (int16_t)q;
+        b[n++] = (int16_t)q;
+        b[n++] = (int16_t)note;
+        if (set[track][MAQAM_CH_TYPE] == MAQAM_CHORD_DRN5) b[n++] = (int16_t)(q + (int)maqam_mod(key[slot[4]] - key[0], 12));
+        if (set[track][MAQAM_CH_VOICE] == MAQAM_VOICE_BASS) b[n++] = (int16_t)(q - 12);   /* OPEN has no effect */
+        return n;
+    }
     const uint8_t *shape = SHAPE[set[track][MAQAM_CH_TYPE]];
     for (; n < OFFSETS && shape[n] != END; ++n) {
         unsigned j = idx + shape[n], s = slot[j % len];
@@ -175,6 +193,7 @@ MAQAM_SMALL unsigned maqam_chord_notes(unsigned track, unsigned note, unsigned d
     unsigned n = track < GROOVE_TRACKS ? stack(track, note, desc, b) : 0;
     if (!n) return 0;
     unsigned inv = set[track][MAQAM_CH_INV], v = set[track][MAQAM_CH_VOICE], p = last[track].n;
+    if (set[track][MAQAM_CH_TYPE] >= MAQAM_CHORD_DRN) return voice(b, n, 0, 0, 0, out);
     if (inv != MAQAM_INV_AUTO || !p) return voice(b, n, inv == MAQAM_INV_AUTO ? 0 : inv, v, 0, out);
     /* AUTO: the inversion and octave nearest the last chord (sorted notes, shorter length), ties to the lower
        inversion, then shift 0 */

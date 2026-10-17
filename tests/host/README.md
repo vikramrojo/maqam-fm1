@@ -124,8 +124,8 @@ double-tap octave (150 ms yes, slow no, key between no, clamp), drum tracks unch
 ## Chords test
 
 `chords_test` (run from the repository root) covers chord mode (`app/maqam/chords.c`): the chord notes for WEST MIN
-on A (all seven degrees), Rast TRIAD on C, the descending-only Bb key, Bayati JINS on D, pentatonic TRIAD, snapping,
-all seven types, inversions (3RD clamps), AUTO (C then F = C4 F4 A4), OPEN and BASS, and an exhaustive pass over all
+on A (all seven degrees), Rast TRIAD on C, the descending-only Bb key, DRN over A in Hüseyni, pentatonic TRIAD, snapping,
+all eight types, inversions (3RD clamps), AUTO (C then F = C4 F4 A4), OPEN and BASS, and an exhaustive pass over all
 73 scales x 24 roots x 7 types x every degree key (ascending, in range, on keys that carry a degree) and over every
 inversion/voicing (at most 8 notes, in range). Through the real `screen.c` key loop it checks that a chord-mode key
 records its chord on the step, that overlapping chords keep shared notes until the last holder releases (Goertzel
@@ -177,6 +177,6 @@ PNGs `scale_row_bayati`, `scale_row_rast`, `scale_alt_bayati` and `steps_bb4` in
 
 `tests/host/scale_shots.c` renders edge cases of the scale pages (Rast up/down, Hijaz, Sikah on Ed, Suznak's
 9 degrees, pentatonic, chromatic, Bb major, a fallback root, quarter-tone roots, PSYCH, JINS, own-scale track,
-CUSTOM, drums, TRACK page with FOLLOW/OWN layouts, alt extremes, REDUCE SAMPLE BANK, the overview header tag, the CHORD page (Rast TRIAD, 7TH AUTO, Bayati JINS), the stock DX7 scaling and curves screens for comparison) to `build/host/shots/*.png`. It is not a test, so
+CUSTOM, drums, TRACK page with FOLLOW/OWN layouts, alt extremes, REDUCE SAMPLE BANK, the overview header tag, the CHORD page (Rast TRIAD, 7TH AUTO, DRN over A in Hüseyni), the stock DX7 scaling and curves screens for comparison) to `build/host/shots/*.png`. It is not a test, so
 `build.sh` skips it; build it with the same command as a test, adding `tests/host/scale_shots.c` and
 `-I tests/host`, then run `build/host/scale_shots` from the repository root.
