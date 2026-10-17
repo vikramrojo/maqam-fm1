@@ -109,10 +109,10 @@ void maqam_name_scale(unsigned scale, unsigned root, unsigned note, int cents, c
 unsigned maqam_degree_name(unsigned scale, unsigned root, unsigned q, char out[4]);
 
 /* chords.c: chord mode (control task only). Settings are per track, in RAM. fields: MODE 0/1, TYPE TRIAD 7TH SUS2
-   SUS4 5TH 5+8 JINS = 0..6, INV ROOT 1ST 2ND 3RD AUTO = 0..4, VOICE CLOSE OPEN BASS = 0..2. */
+   SUS4 5TH 5+8 DRN DRN5 = 0..7, INV ROOT 1ST 2ND 3RD AUTO = 0..4, VOICE CLOSE OPEN BASS = 0..2. */
 enum { MAQAM_CH_MODE, MAQAM_CH_TYPE, MAQAM_CH_INV, MAQAM_CH_VOICE, MAQAM_CH_FIELDS };
 enum { MAQAM_CHORD_TRIAD, MAQAM_CHORD_7TH, MAQAM_CHORD_SUS2, MAQAM_CHORD_SUS4, MAQAM_CHORD_5TH, MAQAM_CHORD_5P8,
-       MAQAM_CHORD_JINS, MAQAM_CHORD_TYPES };
+       MAQAM_CHORD_DRN, MAQAM_CHORD_DRN5, MAQAM_CHORD_TYPES };
 enum { MAQAM_INV_ROOT, MAQAM_INV_1ST, MAQAM_INV_2ND, MAQAM_INV_3RD, MAQAM_INV_AUTO };
 enum { MAQAM_VOICE_CLOSE, MAQAM_VOICE_OPEN, MAQAM_VOICE_BASS };
 void maqam_chords_reset(void);                            /* settings, last chords and key ownership to defaults (not sounding notes) */
@@ -137,7 +137,7 @@ int maqam_chord_play(unsigned key, int (*out)(unsigned track, unsigned note, uns
 int maqam_chord_stop(unsigned key, int (*out)(unsigned track, unsigned note, unsigned on));
 void maqam_chord_sync(const uint8_t key_note[27]);
 unsigned maqam_chord_holders(unsigned track, unsigned note, unsigned skip);
-/* Interval name (SUB MIN NEU MAJ SUP + '-' / '+' fifth + '7', DOM7, 5TH 8VA 5+8 SUS2 SUS4 ADD9 JINS, SINGLE, CUST) of
+/* Interval name (SUB MIN NEU MAJ SUP + '-' / '+' fifth + '7', DOM7, 5TH 8VA 5+8 SUS2 SUS4 ADD9, +NNN drones, SINGLE, CUST) of
    ascending notes from their tuned pitches (the track's alt table when alt), rounded to 50 c; out holds 8 bytes.
    step_chord_name: the same for the chord on a step of a melodic track. */
 void maqam_chord_name(unsigned track, unsigned alt, const uint8_t *notes, unsigned n, char out[8]);

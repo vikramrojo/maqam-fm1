@@ -77,10 +77,6 @@ static void types(void)
     conf(MAQAM_CHORD_SUS4, 0, 0); SAYS(60, 0, "60 65 67");
     conf(MAQAM_CHORD_5TH, 0, 0);  SAYS(60, 0, "60 67");
     conf(MAQAM_CHORD_5P8, 0, 0);  SAYS(60, 0, "60 67 72");
-    /* a jins on D (Bayati): D Ed F G */
-    boot("BAYAT", 4);
-    conf(MAQAM_CHORD_JINS, 0, 0);
-    SAYS(62, 0, "62 64 65 67");
     /* pentatonic C D E G A: degrees 1 3 5 are C E A */
     boot("PEN", 0);
     conf(MAQAM_CHORD_TRIAD, 0, 0);
@@ -95,13 +91,61 @@ static void types(void)
     CHECK(maqam_chord_notes(0, 60, 0, (uint8_t[8]){0}) == 0);
     boot("MAJ", 0);
     CHECK(sim_select(0, GROOVE_808) == 0 && maqam_chord_notes(0, 60, 0, (uint8_t[8]){0}) == 0);
-    CHECK(maqam_chord_set(0, MAQAM_CH_TYPE, 7) < 0 && maqam_chord_set(0, MAQAM_CH_INV, 5) < 0 &&
+    CHECK(maqam_chord_set(0, MAQAM_CH_TYPE, 8) < 0 && maqam_chord_set(0, MAQAM_CH_INV, 5) < 0 &&
           maqam_chord_set(0, MAQAM_CH_VOICE, 3) < 0 && maqam_chord_set(0, MAQAM_CH_MODE, 2) < 0 &&
           maqam_chord_set(8, MAQAM_CH_MODE, 1) < 0 && maqam_chord_set(0, 4, 0) < 0);
-    printf("types: WEST MIN degrees, Rast neutral triad, descending-only Bb, Bayati jins, pentatonic, snapping\n");
+    printf("types: WEST MIN degrees, Rast neutral triad, descending-only Bb, pentatonic, snapping\n");
 }
 
 /* Every scale x root x type x degree key: ascending, in range, each note on a key that carries a degree. */
+/* Every scale and root, DRN and DRN5, every pedal placement and voicing, on every degree key: ascending, in range, at
+   most 8, the pedal on the tonic's assigned key, the played note last, DRN5's fifth between them. */
+static void drones_all(void)
+{
+    unsigned n_ok = 0;
+    for (unsigned s = 0; s < NSCALES; ++s) {
+        CHECK(__builtin_popcount(scale_up(&SCALES[s])) >= 5);   /* DRN5's degree 5 exists */
+        for (unsigned r = 0; r < 24; ++r) {
+            if (maqam_set_project(s, r) < 0) continue;
+            unsigned sc, rt;
+            const int8_t *key = maqam_keys_assignment(0, &sc, &rt);
+            if (!key) continue;
+            int tonic = key[0];
+            for (unsigned type = MAQAM_CHORD_DRN; type < MAQAM_CHORD_TYPES; ++type)
+                for (unsigned inv = 0; inv <= MAQAM_INV_AUTO; ++inv)
+                    for (unsigned v = 0; v < 3; v += 2) {
+                        maqam_chords_reset();
+                        conf(type, inv, v);
+                        for (unsigned slot = 0; slot < 24; ++slot) {
+                            if (key[slot] < 0) continue;
+                            for (unsigned oct = 0; oct < 2; ++oct) {
+                                unsigned note = (oct ? 84 : 36) + (unsigned)key[slot];
+                                uint8_t n[8];
+                                unsigned c = maqam_chord_notes(0, note, 0, n);
+                                maqam_chord_commit(0, n, c);
+                                unsigned want = (type == MAQAM_CHORD_DRN5 ? 3U : 2U) + (v == MAQAM_VOICE_BASS);
+                                unsigned has = 0, ped = 0;
+                                int bad = c > want || c + 1 < want || c < 2;   /* a duplicate (the fifth, or the BASS, on the played note) is dropped */
+                                for (unsigned i = 0; i < c && !bad; ++i) {
+                                    has |= n[i] == note;
+                                    ped += n[i] % 12 == (unsigned)tonic;
+                                    bad |= n[i] > 127 || (i && n[i] <= n[i - 1]);
+                                }
+                                bad |= !has || !ped || (inv < 2 && n[c - 1] != note && type == MAQAM_CHORD_DRN);   /* the pedal is on the tonic key */
+                                if (bad) {
+                                    if (failures < 10) printf("FAIL drone scale %s root %u type %u inv %u slot %u: %s\n", SCALE_CODE_STR[s], r, type, inv, slot, chord(note, 0));
+                                    ++failures;
+                                }
+                                ++n_ok;
+                            }
+                        }
+                    }
+        }
+    }
+    CHECK(n_ok > 100000);
+    printf("exhaustive drones: %u chords, every scale and root, DRN/DRN5, ROOT..AUTO, CLOSE/BASS\n", n_ok);
+}
+
 static void exhaustive(void)
 {
     unsigned combos = 0, chords = 0, none = 0, skipped = 0;
@@ -115,9 +159,9 @@ static void exhaustive(void)
             int8_t k[24];
             if (key) memcpy(k, key, 24);
             ++combos;
-            for (unsigned type = 0; type < MAQAM_CHORD_TYPES; ++type) {
+            for (unsigned type = 0; type < MAQAM_CHORD_DRN; ++type) {
                 maqam_chord_set(0, MAQAM_CH_TYPE, type);
-                unsigned want = (unsigned[]){3, 4, 3, 3, 2, 3, 4}[type];
+                unsigned want = (unsigned[]){3, 4, 3, 3, 2, 3}[type];
                 for (unsigned slot = 0; slot < 24; ++slot) {
                     if (!key) {
                         none += slot == 0;
@@ -145,8 +189,45 @@ static void exhaustive(void)
             }
         }
     CHECK(combos > 1500);
+    drones_all();
     printf("exhaustive: %u scale/root pairs (%u skipped, %u without degrees), %u chords ascending, in range, on degree keys\n",
            combos, skipped, none, chords);
+}
+
+/* The drone scenarios of the chord-mode spec (tasks 5.1). Hüseyni on A: the tonic A, the fifth E, the B key (B-half-flat). */
+static void drones(void)
+{
+    boot("P.HUS", 18);
+    conf(MAQAM_CHORD_DRN, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE);
+    SAYS(59, 0, "45 59");                          /* A2 under B-half-flat 3 */
+    conf(MAQAM_CHORD_DRN5, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE);
+    SAYS(59, 0, "45 52 59");                       /* A2 E3 B-half-flat 3 */
+    conf(MAQAM_CHORD_DRN, MAQAM_INV_1ST, MAQAM_VOICE_CLOSE);
+    SAYS(59, 0, "57 59");                          /* the tight drone */
+    conf(MAQAM_CHORD_DRN, MAQAM_INV_2ND, MAQAM_VOICE_CLOSE);
+    SAYS(59, 0, "59 69");                          /* the high drone */
+    conf(MAQAM_CHORD_DRN5, MAQAM_INV_3RD, MAQAM_VOICE_OPEN);
+    SAYS(59, 0, "59 69 76");                       /* OPEN has no effect; the fifth sits above the pedal */
+    conf(MAQAM_CHORD_DRN, MAQAM_INV_1ST, MAQAM_VOICE_CLOSE);
+    SAYS(57, 0, "45 57");                          /* the tonic itself: 1ST puts the pedal an octave below */
+    conf(MAQAM_CHORD_DRN, MAQAM_INV_2ND, MAQAM_VOICE_CLOSE);
+    SAYS(57, 0, "57 69");                          /* and 2ND an octave above */
+    /* AUTO keeps the previous pedal while it stays below the note; the first drone chord is ROOT */
+    boot("MAJ", 0);
+    conf(MAQAM_CHORD_DRN, MAQAM_INV_AUTO, MAQAM_VOICE_CLOSE);
+    uint8_t c[8];
+    unsigned n = maqam_chord_notes(0, 60, 0, c);
+    CHECK(n == 2 && c[0] == 48 && c[1] == 60);
+    maqam_chord_commit(0, c, n);
+    n = maqam_chord_notes(0, 72, 0, c);
+    CHECK(n == 2 && c[0] == 48 && c[1] == 72);     /* C3 again, not C4 */
+    maqam_chord_commit(0, c, n);
+    n = maqam_chord_notes(0, 48, 0, c);            /* a note the pedal no longer sits below: ROOT again */
+    CHECK(n == 2 && c[0] == 36 && c[1] == 48);
+    /* BASS adds the pedal an octave lower */
+    conf(MAQAM_CHORD_DRN, MAQAM_INV_ROOT, MAQAM_VOICE_BASS);
+    SAYS(64, 0, "36 48 64");
+    printf("drones: DRN/DRN5 over A in Huseyni, ROOT/1ST/2ND placement, AUTO steady pedal, BASS, OPEN ignored\n");
 }
 
 /* Inversions, AUTO, voicing and their limits. */
@@ -433,8 +514,8 @@ static void names(void)
     NAMED(0, "SUS4", 60, 65, 67);
     NAMED(0, "ADD9", 60, 64, 67, 74);
     NAMED(0, "CUST", 60, 61, 62, 63, 64);
-    NAMED(0, "CUST", 60, 64);
-    /* tunings the semitone stack does not show: neutral seventh and a four-note jins */
+    NAMED(0, "+400", 60, 64);                  /* any other two notes read as a drone */
+    /* tunings the semitone stack does not show: neutral seventh */
     struct groove_tuning g;
     memset(&g, 0, sizeof g);
     g.main[4] = -50; g.main[11] = -50;         /* E 350 c, B 1050 c */
@@ -443,7 +524,7 @@ static void names(void)
     memset(&g, 0, sizeof g);
     g.main[1] = 50;                            /* C# 150 c */
     CHECK(groove_tuning_set(0, &g) == 0);
-    NAMED(0, "JINS", 60, 61, 63, 65);          /* 0 150 300 500 */
+    NAMED(0, "CUST", 60, 61, 63, 65);          /* the four-note cluster is no longer a named jins */
     memset(&g, 0, sizeof g);
     g.main[4] = -5; g.main[7] = 20; g.alt[4] = -50;   /* rounding to 50 c; the alt table for an alt step */
     CHECK(groove_tuning_set(0, &g) == 0);
@@ -452,6 +533,20 @@ static void names(void)
     CHECK(groove_tuning_set(0, &g) == 0);
     NAMED(1, "NEU", 60, 64, 67);               /* an alt step reads the alt table */
     NAMED(0, "MAJ", 60, 64, 67);
+    /* drone names: +NNN for a two-note chord, or three notes whose lowest two are a fifth apart */
+    boot("RAST", 0);
+    {
+        struct groove_tuning rt;
+        maqam_engine_get(0, &rt);
+        CHECK(rt.main[4] == -43);               /* E entry -43 (TRAD) */
+    }
+    NAMED(0, "+350", 36, 64);                  /* Rast C3 under E-half-flat 4 */
+    boot("P.HUS", 18);
+    NAMED(0, "+150", 45, 52, 59);              /* DRN5 on A: A2 E3 B-half-flat 3 */
+    boot("MAJ", 0);
+    NAMED(0, "MAJ", 60, 67, 76);               /* an OPEN triad is not a drone */
+    NAMED(0, "+0", 60, 84);
+    NAMED(0, "+1100", 60, 83);
     /* the 12 stock chords in WEST major: none CUST */
     boot("MAJ", 0);
     static const char *const stock[12] = {"MAJ", "MIN", "MAJ7", "MIN7", "DOM7", "SUS2", "SUS4", "MIN-", "MAJ+", "5TH", "8VA", "ADD9"};
@@ -478,12 +573,13 @@ static void names(void)
     strcpy(v, "MAJOR");
     maqam_step_chord_name(0, 0, v);
     CHECK(!strcmp(v, "MAJOR"));
-    printf("names: NEU/MAJ by tuning, MIN-, inversions, sevenths, fixed shapes, jins, 12 stock chords, step page\n");
+    printf("names: NEU/MAJ by tuning, MIN-, inversions, sevenths, fixed shapes, drones, 12 stock chords, step page\n");
 }
 
 int main(void)
 {
     types();
+    drones();
     exhaustive();
     voicing();
     sounding();

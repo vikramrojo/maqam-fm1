@@ -180,7 +180,7 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
 {
     static const char title[MAQAM_SUBPAGES][6] = {"SCALE", "TRACK", "CHORD"};
     static const char label[4][6] = {"MODE", "TYPE", "INV", "VOICE"};
-    static const char value[][5] = {"TRI", "7TH", "SUS2", "SUS4", "5TH", "5+8", "JINS", "ROOT", "1ST", "2ND", "3RD", "AUTO",
+    static const char value[][5] = {"TRI", "7TH", "SUS2", "SUS4", "5TH", "5+8", "DRN", "DRN5", "ROOT", "1ST", "2ND", "3RD", "AUTO",
                                     "CLOS", "OPEN", "BASS", "OFF", "ON"};   /* TYPE, INV, VOICE, MODE */
     struct groove_tuning g;
     memset(v, 0, sizeof *v);
@@ -209,7 +209,7 @@ MAQAM_SMALL void maqam_page_view(unsigned t, struct maqam_view *v)
     if (no_space) put(v->warn, sizeof v->warn, "SAVE FAILED: REDUCE SAMPLE BANK");
 
     if (sub == SUB_CHORD) {                               /* the last chord, spelled, and its name */
-        static const uint8_t base[4] = {15, 0, 7, 12};
+        static const uint8_t base[4] = {16, 0, 8, 13};
         uint8_t n[8];
         unsigned c = maqam_chord_last(t, n);
         for (unsigned i = 0; i < 4; ++i) {

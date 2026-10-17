@@ -929,8 +929,15 @@ static void chord_page(void)
     has("INV 1ST", v.knob[2][1], "1ST");  has("VOICE OPEN", v.knob[3][1], "OPEN");
     for (unsigned i = 0; i < 8; ++i) { enc(3, 1); enc(4, 1); enc(5, 1); }   /* each stops at its last value */
     maqam_page_view(0, &v);
-    has("TYPE clamps at JINS", v.knob[1][1], "JINS");  has("INV clamps at AUTO", v.knob[2][1], "AUTO");
+    has("TYPE clamps at DRN5", v.knob[1][1], "DRN5");  has("INV clamps at AUTO", v.knob[2][1], "AUTO");
     has("VOICE clamps at BASS", v.knob[3][1], "BASS");
+    for (unsigned t = 0; t < MAQAM_CHORD_TYPES; ++t) {   /* every TYPE label, in order */
+        static const char *const lab[MAQAM_CHORD_TYPES] = {"TRI", "7TH", "SUS2", "SUS4", "5TH", "5+8", "DRN", "DRN5"};
+        CHECK(maqam_chord_set(0, MAQAM_CH_TYPE, t) == 0);
+        maqam_page_view(0, &v);
+        has("TYPE label", v.knob[1][1], lab[t]);
+    }
+    CHECK(maqam_chord_set(0, MAQAM_CH_TYPE, MAQAM_CHORD_DRN5) == 0);
     for (unsigned i = 0; i < 8; ++i) { enc(2, -1); enc(3, -1); enc(4, -1); enc(5, -1); }
     CHECK(maqam_chord_get(0, MAQAM_CH_MODE) == 0 && maqam_chord_get(0, MAQAM_CH_TYPE) == 0 &&
           maqam_chord_get(0, MAQAM_CH_INV) == 0 && maqam_chord_get(0, MAQAM_CH_VOICE) == 0);
