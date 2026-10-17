@@ -1,0 +1,49 @@
+# SLOOP scales: TURK set (index 16..27)
+# Source: Arel-Ezgi-Uzdilek system. Its intervals are Pythagorean ratios (built from 3/2), and
+# Turkish theory names them by their size in commas (1/53 octave, about 22.6 c):
+#   koma 1 = 531441/524288, bakiye 4 = 256/243, kucuk mucennep 5 = 2187/2048,
+#   buyuk mucennep 8 = 65536/59049, tanini 9 = 9/8, artik ikili 12 = 256/243 x 65536/59049,
+#   13 = 256/243 x 9/8 (= 32/27), 14 = 2187/2048 x 9/8.
+# Each value is the product of the step ratios from the tonic (the comma steps are in the
+# comments). Every makam closes on exactly 2/1. Home notes use the nearest 24-grid note
+# (Segah/Huzzam: B-koma-flat -> Bd).
+
+scale T.RST "Rast" home G   # steps 9,8,5,9,9,8,5 (down 9,8,5,9,9,4,9)
+  up   1/1 9/8 8192/6561 4/3 3/2 27/16 4096/2187
+  down 1/1 9/8 8192/6561 4/3 3/2 27/16 16/9
+
+scale USSAK "Ussak" home A   # steps 8,5,9,9,4,9,9
+  up   1/1 65536/59049 32/27 4/3 3/2 128/81 16/9
+
+scale HUSEY "Huseyni" home A   # steps 8,5,9,9,8,5,9 (down 8,5,9,9,4,9,9)
+  up   1/1 65536/59049 32/27 4/3 3/2 32768/19683 16/9
+  down 1/1 65536/59049 32/27 4/3 3/2 128/81 16/9
+
+scale KURDI "Kurdi" home A   # steps 4,9,9,9,4,9,9
+  up   1/1 256/243 32/27 4/3 3/2 128/81 16/9
+
+scale NIHAV "Nihavend" home G   # steps 9,4,9,9,4,13,5 (down 9,4,9,9,4,9,9)
+  up   1/1 9/8 32/27 4/3 3/2 128/81 4096/2187
+  down 1/1 9/8 32/27 4/3 3/2 128/81 16/9
+
+scale HICAZ "Hicaz" home A   # steps 5,12,5,9,8,5,9 (down 5,12,5,9,4,9,9)
+  up   1/1 2187/2048 8192/6561 4/3 3/2 32768/19683 16/9
+  down 1/1 2187/2048 8192/6561 4/3 3/2 128/81 16/9
+
+scale HCKAR "Hicazkar" home G   # steps 5,12,5,9,5,12,5
+  up   1/1 2187/2048 8192/6561 4/3 3/2 6561/4096 4096/2187
+
+scale SUZIN "Suzinak" home G   # steps 9,8,5,9,5,12,5
+  up   1/1 9/8 8192/6561 4/3 3/2 6561/4096 4096/2187
+
+scale KARCI "Karcigar" home A   # steps 8,5,9,5,12,5,9
+  up   1/1 65536/59049 32/27 4/3 729/512 32768/19683 16/9
+
+scale T.SBA "Saba" home A   # steps 8,5,4,14,4,9,9
+  up   1/1 65536/59049 32/27 8192/6561 3/2 128/81 16/9
+
+scale SEGAH "Segah" home Bd   # steps 5,9,9,8,5,9,8
+  up   1/1 2187/2048 19683/16384 177147/131072 3/2 6561/4096 59049/32768
+
+scale HUZZM "Huzzam" home Bd   # steps 5,9,5,12,5,9,8
+  up   1/1 2187/2048 19683/16384 43046721/33554432 3/2 6561/4096 59049/32768

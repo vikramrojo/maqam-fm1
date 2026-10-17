@@ -2,10 +2,12 @@
 /* Modified 2026-10-17: bind tuning to project contents, not device settings;
  * preserve valid version-1 entries before rewriting their project records;
  * defer edit checkpoints until allocation succeeds; reject tuned saves that
- * overlap a legacy sample bank before changing Flash. */
+ * overlap a legacy sample bank before changing Flash; maqam load/save hooks
+ * and the V13 fork's scale trailer (read for migration). */
 #include "instrument.h"
 #include "tuning_hook.h"
 #include "fm_patch.h"
+#include "maqam/maqam.h" /* maqam: */
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +32,10 @@ static struct record {
 } record;
 _Static_assert(sizeof record == 4096, "single-sector project record");
 _Static_assert(sizeof record <= FM1_FLASH_SECTOR_BYTES, "one record per sector");
+/* maqam: the scale settings. The V13 fork kept them in 8 bytes after a V5
+ * record (read for migration); V14 records fill the sector. 0xFF when absent. */
+enum { TAIL_BYTES = MAQAM_TRAILER_BYTES };
+static uint8_t record_tail[TAIL_BYTES];
 static struct settings settings;
 static char project_name[12] = {'U', 'N', 'T', 'I', 'T', 'L', 'E', 'D', ' ', ' ', ' ', ' '};
 static unsigned restore_pending, role_pending, settings_dirty;
@@ -80,6 +86,7 @@ static uint32_t checksum(void)
 static int read_sector(unsigned sector)
 {
     uint32_t address = sector * FM1_FLASH_SECTOR_BYTES;
+    memset(record_tail, 0xff, sizeof record_tail); /* maqam: */
     int r = fm1_flash_read(address, &record.header, sizeof record.header);
     if (r)
         return r;
@@ -98,6 +105,8 @@ static int read_sector(unsigned sector)
     if (!r)
         r = fm1_flash_read(address + sizeof record.header + bytes,
                            &record.settings, legacy || v5 ? 4 : sizeof record.settings);
+    if (!r && project && v5) /* maqam: the V13 fork kept its settings after a V5 record */
+        r = fm1_flash_read(address + offsetof(struct record, settings) + 4, record_tail, sizeof record_tail);
     if (r)
         return r;
     const struct settings *s = &record.settings;
@@ -565,6 +574,8 @@ int groove_project_save_slot(unsigned slot)
     record.header.magic = PROJECT_MAGIC;
     r = groove_arrangement_capture(&record.project);
     if (!r)
+        maqam_project_save(record_tail); /* maqam: */
+    if (!r)
         r = write_record(slot, generation, saved);
     if (!r) {
         ++project_revision;
@@ -592,6 +603,8 @@ int groove_project_load_slot(unsigned slot)
     if (!r)
         r = read_project(sector);
     uint32_t key[3] = {record.header.generation, record.header.crc, 0};
+    uint8_t tail[TAIL_BYTES]; /* maqam: */
+    memcpy(tail, record_tail, sizeof tail);
     struct groove_tuning tables[GROOVE_TRACKS];
     if (!r && groove_tuning_apply) {
         key[2] = project_tuning_key();
@@ -601,6 +614,8 @@ int groove_project_load_slot(unsigned slot)
         r = apply_edit(&record.project, 0x82000U + slot);
         if (!r && groove_tuning_apply)
             (void)groove_arrangement_tuning_apply(tables);
+        if (!r)
+            maqam_project_loaded(groove_tuning_apply ? tail : NULL); /* maqam: tables are loaded */
     }
     if (!r && settings.slot != slot) {
         settings.slot = (uint8_t)slot;
@@ -642,6 +657,7 @@ int groove_project_import(const uint8_t *bytes, unsigned length)
             (void)groove_arrangement_tuning_apply(block.t);
         else
             tuning_zero();
+        maqam_project_loaded(NULL); /* maqam: */
         groove_project_touch();
     }
     return r;
@@ -670,7 +686,7 @@ int groove_factory_load(unsigned index)
     int r = groove_factory_build(index, &record.project);
     if (r) return r;
     r = apply_edit(&record.project, 0x84000U + index);
-    if (!r) { tuning_zero(); groove_project_touch(); }
+    if (!r) { tuning_zero(); maqam_project_loaded(NULL); /* maqam: */ groove_project_touch(); }
     return r;
 }
 /* BLE MIDI follows the radio master switch. Ignore the old separate MIDI-off
@@ -782,6 +798,7 @@ void groove_project_init(void)
     memset(&settings, 0, sizeof settings);
     groove_midi_defaults(&settings.midi);
     memcpy(project_name, "UNTITLED    ", 12);
+    maqam_init(); /* maqam: */
     restore_pending = 2;
     session_pending = 2; session_dirty = 0;
     role_pending = 2;

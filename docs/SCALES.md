@@ -1,0 +1,277 @@
+<!-- Ported from maqam-dev (GPL-3.0) SCALES.md and adapted for FM1 Open. -->
+# Scales and quarter tones on FM1 Open
+
+How to play and edit the 73 scales (Western, Turkish, Arabic, Indian, plus the PSYCH and JINS sets), quarter tones and per-step alternate pitches on the FM1 screen. This is the fork's scale feature (`openspec/changes/maqam-scales`); stock FM1 Open V13 only provides the engine tables underneath.
+
+Two words used throughout:
+- **Half-flat** (written `Ed` in text) is a quarter tone, 50 cents, below the note: E half-flat sits halfway between E-flat and E.
+- **Half-sharp** (written `E+`) is a quarter tone above.
+
+Panel words: **SELECT** is the first encoder (track), **ALGO** the second (page), **K1-K4** the four knobs under the display, **PRESETS** the seventh encoder.
+
+---
+
+## 1. How it works
+
+- Every melodic track has two tables of 12 whole-cent offsets, one per pitch class (C, C#, D ... B): a **main** table and an **alt** table (an engine feature of V13, saved with the project). The engine adds the offset at note-on. Nothing else about notes changes: a step stores an ordinary MIDI note plus a one-bit **alt** flag.
+- Choosing a scale **computes the main table**. Choosing a root and a scale puts each degree on one of the 12 keys, so the keys play the scale's exact pitches.
+- **Intonation** decides how exact:
+  - **EQUAL** puts each degree on the quarter-tone grid: offsets are 0 or exactly -50 / +50 from the key.
+  - **TRAD** (the default) uses the scale's exact pitch to a whole cent: Pythagorean for Turkish, al-Ṣabbāgh for Arabic, just intonation for Indian. Rast on C: E -43, B -41, A# +20, D +4, F -2, G +2, A +6. Western, PSYCH and JINS scales are equal in both.
+  - It is a **project** setting. Switching it recomputes every track that follows a scale and does not touch alt edits.
+- **Drum tracks** (808, sampler, track 8) are never tuned.
+
+### The alt table
+
+A semitone degree and a quarter-tone degree compete for the same key (E half-flat and E-flat both live near the E key), so each key has a second pitch:
+- **Default alt table**: a **WEST** scale gets an all-zero alt table (a WEST project has all-zero tables; quarter tones are one edit away on the ALT page). For every other set: a key carrying a quarter-tone degree gets 0 (plain 12-TET: E-half-flat's alt is E); a key carrying a semitone degree gets -50 (its half-flat); keys with no degree get 0. Rast on C: alt 0 on E and B, -50 on C, D, F, G, A, A#.
+- A **scale or root change resets** the track's alt table to these defaults. Edits survive everything else (intonation, saving, loading).
+- Each entry is editable from -127 to +127 cents on the ALT page (section 4).
+
+---
+
+## 2. Playing
+
+### Key layouts
+
+The layout says what the 27 keys do on a tuned track. Set it on the KEYS page (section 4): a project default (saved with the project) and a per-track override (not saved).
+
+- **SNAP** (default): every key plays. Each key plays its own pitch class if the scale has a degree there; otherwise it plays the next scale note **above** when you are going up and **below** when going down. In C major, C# plays D going up and C going down.
+- **WHITE**: the white keys walk the scale's notes in order, starting at C4 = the root note, and the black keys are silent. A seven-note maqam fits in the seven white keys of an octave, so this is the easiest way to play any maqam. The layout comes from the form of the scale with more notes, so it does not shift with the direction.
+- **CHROM**: plain chromatic keys. Chromatic and CUSTOM tracks always play like this.
+
+### Up and down
+
+Scales can have different ascending and descending forms (Rast: B half-flat up, B-flat down). A key **lower than the previous key** uses the descending form; any other key (higher or the same) the ascending form. After a pause of more than one second the next key counts as going up. The note that sounds is the note that gets recorded.
+
+### Alt gesture and octave
+
+On a melodic track, **hold OCT- or OCT+** and press a key: that note uses the **alt** table. While recording, the step is stored with the alt flag and plays back alt. Keys already sounding are not re-attacked when you press or release OCT.
+
+The octave changes with a **double tap** of OCT- or OCT+ (two presses within 300 ms, no key between). A single tap does nothing on melodic tracks. On drum tracks and on the step pages the OCT buttons keep their stock behaviour (single press changes the octave / pages the steps).
+
+### Key lights
+
+On a melodic track with a scale, the LEDs of the keys that carry a degree light up (Rast on C: C D E F G A A# B; not C# D# F# G#).
+
+---
+
+## 3. Names on the screen
+
+Wherever a melodic note is named (the step tiles, the step NOTE knob, the NOTE knob on the overview), the name is the key plus its table offset, rounded to the nearest quarter tone, in the 24 names
+
+`C C+ C# Dd D D+ D# Ed E Fd F F+ F# Gd G G+ G# Ad A A+ A# Bd B Cd`
+
+(`d` half-flat, `+` half-sharp) followed by the octave. `Cd` is the quarter tone below the next C: B4 +50 c reads `Cd5`. A zero offset gives exactly the stock 12-tone name, so Western scales look as they always did.
+
+- **Alt steps carry a dot**: a step that holds alt E in a Rast track reads `E4.` while a plain E step reads `Ed4`. The name of an alt step comes from the alt table.
+- Drum tracks show the stock names.
+
+---
+
+## 4. The scale pages
+
+Open them with **HOME + SCL** (hold HOME, press SCL; in either order). The SCL button lights while you are there. **HOME** leaves, as on every page; **SCL** alone is still the stock FM scaling page; **SAVE** opens the project page and returns here after a good save. The keys do not play on these pages: they are controls.
+
+**SELECT** picks the track, **ALGO** moves between the four pages. The top of every page shows the subtitle, for the project (page 1) or the selected track (pages 2-4):
+
+`Ed arab sikah^ trad` = root Ed (E half-flat), set ARAB, scale Sikah, TRAD.
+
+- The arrow after the scale name (up or down, as the last key of the track went) shows **only for scales whose two forms differ**. Scales with one form (Major, Bilawal ...) show none.
+- The line under it says whether the track **FOLLOWS PROJECT**, has an **OVERRIDE**, or has a **CUSTOM TABLE**, and for drum tracks **DRUMS - NOT TUNED**.
+- The **home hint** `home: Ed` shows the scale's traditional tonic for non-Western scales. It is a hint only: choosing a scale never moves the root. To play Sikah at home, press E half-flat as the root (OCT- + E).
+- A strip of 12 key cells shows the track's keys: coloured = carries a degree, green frame = root. The numbers under it are the table's cents (main on pages 1-3, alt on page 4).
+- If the last project save was refused because a sample bank leaves no room for the tuning tables, the pages show **SAVE FAILED: REDUCE SAMPLE BANK** (section 6).
+
+### Page 1/4: PROJECT
+
+| Control | Does |
+|---|---|
+| **K1 ROOT** | the project root, a quarter tone per click (24 positions, wraps) |
+| **K2 SET** | WEST, TURK, ARAB, INDIA, PSYCH, JINS (jumps to that set's first scale) |
+| **K3 SCALE** | the scale within the set (wraps) |
+| **K4 TUNING** | right = TRAD, left = EQUAL |
+| **a key** | sets the root to that note |
+| **OCT- + a key** / **OCT+ + a key** | the root a quarter tone lower / higher: OCT- + E = E half-flat |
+
+Every melodic track follows these unless it overrides.
+
+### Page 2/4: TRACK
+
+| Control | Does |
+|---|---|
+| **K1 OVERRIDE** | right = this track gets its own root and scale (starting from the project's); left = it follows the project again |
+| **K2 ROOT**, **K3 SET**, **K4 SCALE** | edit the track's root, set and scale (turning any of them switches the override on) |
+| **a key**, **OCT-/OCT+ + key** | the track's root, as on page 1 |
+
+A track always uses the project's intonation. Two maqamat at once: set the project to Rast on C, then override track 2 with Bayati on D.
+
+**CUSTOM**: a track whose table matches no scale (edited by hand, or by another tool) shows `custom`; its table is kept exactly as it is. K1 left on this page replaces it with the project's scale.
+
+### Page 3/4: KEYS
+
+| Control | Does |
+|---|---|
+| **K1 PROJECT** | the project default layout: SNAP, WHITE, CHROM |
+| **K2 TRACK** | this track's layout: FOLLOW (the project's), SNAP, WHITE, CHROM |
+
+### Page 4/4: ALT table editor
+
+| Control | Does |
+|---|---|
+| **a key** or **K1 KEY** | picks which pitch class's alt entry to edit (highlighted in the strip) |
+| **K2** | the entry's cents, +/-1 per click, from -127 to +127 |
+| **K3** | the same, +/-10 per click |
+| **K4 RESET** | turn it: the track's alt table goes back to the scale's defaults |
+
+The large line shows the **signed cents** and the 24-tone name of the resulting pitch at octave 4 (alt E at -100: `ALT -100 D#4`, the pitch of E-flat), and the line under it the main entry. Edits are kept until the scale or root of that track next changes, and are saved with the project.
+
+---
+
+## 5. Recipes
+
+- **Play a maqam in two moves.** HOME+SCL, K2 to ARAB, K3 to the maqam, press the root key (or K1); ALGO twice to KEYS, K1 to WHITE; HOME; play the white keys up and down.
+- **Hear the traditional tuning.** Hold a note on a Rast track and turn K4 on page 1 back and forth: the pitch moves by a few cents.
+- **One quarter tone anywhere.** Hold OCT- (or OCT+) and press a key to get the alt pitch; with Rast alt E is plain E.
+- **Record an alt note.** REC, hold OCT-, press the key: the step shows `E4.`.
+- **Two maqamat.** See page 2.
+- **Fine-tune an alt entry.** Page 4, press the key, K2 / K3.
+
+---
+
+## 6. Saving
+
+- The tables are saved with the project by FM1 Open V13 itself (and travel with SysEx project transfer and undo). The fork adds an 8-byte trailer to the project record with the project scale, root, intonation, key layout default and which tracks override. Stock V13 firmware ignores the trailer and still plays the same tuning.
+- A track's own scale and root are recovered from its saved table by matching it against the library at the project intonation (first match wins). A table with no match loads as CUSTOM and is never changed.
+- A stock project without a trailer loads as WEST / C / TRAD; if it carries tables, they are kept and each track's scale is derived or shown as CUSTOM.
+- **REDUCE SAMPLE BANK**: V13 keeps the tuning tables in the last flash sector, which an old, very large stored sample bank can overlap. Saving non-zero tuning then fails (the project page says `REDUCE SAMPLE BANK`, and the scale pages repeat it); saving a project with all-zero tables still works. Remove samples to make room. A project that only uses WEST scales has all-zero tables, so it always saves; non-WEST scales (and edited alt entries) make the tables non-zero.
+- The per-track key layout is not saved; the project default is.
+
+---
+
+## 7. The scales
+
+Codes are what the pages show; **Home** is the traditional tonic (a hint). Scales are append-only: a scale's index is saved in projects and never moves.
+
+### WEST (16)
+
+Western modes and symmetric scales, 12-tone equal temperament. Every offset is 0, so EQUAL and TRAD are identical.
+
+| Code | Name | Home | Forms differ |
+|---|---|---|---|
+| `CHR` | Chromat | C |  |
+| `MAJ` | Major | C |  |
+| `MIN` | Minor | C |  |
+| `DOR` | Dorian | C |  |
+| `MIX` | Mixolyd | C |  |
+| `PEN` | Penta | C |  |
+| `MPEN` | MinPenta | C |  |
+| `HARM` | HarmMin | C |  |
+| `PHRY` | Phrygian | C |  |
+| `LYD` | Lydian | C |  |
+| `LOC` | Locrian | C |  |
+| `MEL` | MelMin | C |  |
+| `BLUES` | Blues | C |  |
+| `WHOLE` | Whole | C |  |
+| `DIMHW` | DimHW | C |  |
+| `DIMWH` | DimWH | C |  |
+
+### TURK (12)
+
+Turkish makamlar, Arel-Ezgi-Uzdilek system: Pythagorean ratios (built from 3/2).
+
+| Code | Name | Home | Forms differ |
+|---|---|---|---|
+| `T.RST` | Rast | G | up / down |
+| `USSAK` | Ussak | A |  |
+| `HUSEY` | Huseyni | A | up / down |
+| `KURDI` | Kurdi | A |  |
+| `NIHAV` | Nihavend | G | up / down |
+| `HICAZ` | Hicaz | A | up / down |
+| `HCKAR` | Hicazkar | G |  |
+| `SUZIN` | Suzinak | G |  |
+| `KARCI` | Karcigar | A |  |
+| `T.SBA` | Saba | A |  |
+| `SEGAH` | Segah | Bd |  |
+| `HUZZM` | Huzzam | Bd |  |
+
+### ARAB (12)
+
+Arabic maqamat, al-Ṣabbāgh (1954) 24-tone ratios; degree structure after Touma, *The Music of the Arabs*, and maqamworld.com.
+
+| Code | Name | Home | Forms differ |
+|---|---|---|---|
+| `RAST` | Rast | C | up / down |
+| `BAYAT` | Bayati | D |  |
+| `SABA` | Saba | D |  |
+| `SIKAH` | Sikah | Ed | up / down |
+| `HIJAZ` | Hijaz | D | up / down |
+| `NAHAW` | Nahawand | C | up / down |
+| `KURD` | Kurd | D |  |
+| `AJAM` | Ajam | A# |  |
+| `NIKRZ` | Nikriz | C |  |
+| `HJKAR` | Hijazkar | C |  |
+| `SUZNK` | Suznak | C | up / down |
+| `HUZAM` | Huzam | Ed | up / down |
+
+### INDIA (12)
+
+Hindustani thaats and ragas, just-intonation swara ratios. Sa is the root.
+
+| Code | Name | Home | Forms differ |
+|---|---|---|---|
+| `YAMAN` | Yaman | C | up / down |
+| `BILAW` | Bilawal | C |  |
+| `KHMAJ` | Khamaj | C | up / down |
+| `KAFI` | Kafi | C |  |
+| `ASAVR` | Asavari | C | up / down |
+| `BHRVI` | Bhairavi | C |  |
+| `BHAIR` | Bhairav | C |  |
+| `TODI` | Todi | C |  |
+| `PURVI` | Purvi | C |  |
+| `MARWA` | Marwa | C |  |
+| `BHUPL` | Bhupali | C |  |
+| `MALKS` | Malkauns | C |  |
+
+### PSYCH (16)
+
+Microtonal "psych" scales as King Gizzard and the Lizard Wizard play them on quarter-tone-fretted guitars: five families built from a 12-TET frame plus a pair of notes that move. Equal quarter tones, so every offset is 0 and EQUAL = TRAD.
+
+| Code | Name | Home | Forms differ |
+|---|---|---|---|
+| `P.HUS` | Huseyni | A |  |
+| `P.MSR` | UshMasri | D |  |
+| `P.NEV` | Neva | A |  |
+| `P.USK` | Ussak | A |  |
+| `P.NHK` | NeutHkar | G |  |
+| `P.HKR` | Hicazkar | G |  |
+| `P.HJZ` | Hijaz | D |  |
+| `P.SUB` | SubPhryg | G |  |
+| `P.SU6` | SubPhr6 | G |  |
+| `P.SEE` | SeeMe | F# |  |
+| `P.BHL` | LowBhair | C |  |
+| `P.CHG` | Chahrgah | C |  |
+| `P.HMY` | Homayun | C |  |
+| `P.RST` | Rast | C |  |
+| `P.ACR` | AcemRast | G |  |
+| `P.MHR` | Mahur | C |  |
+
+### JINS (5)
+
+Combination scales: a lower jins and a different upper jins on the 5th, each attested (a KGLW song, a named Arabic maqam, or a Hindustani raga). Equal quarter tones, so EQUAL = TRAD.
+
+| Code | Name | Home | Forms differ |
+|---|---|---|---|
+| `J.KGL` | KGLW | B |  |
+| `J.NRZ` | Nairuz | C |  |
+| `J.SZK` | Suznak | C |  |
+| `J.HJR` | HijazRst | D |  |
+| `J.DRB` | Darbari | C |  |
+
+---
+
+## Credits and sources
+
+- The scale library, the generator (`tools/gen_scales.py`), the key-assignment idea, the 24 names, the SNAP/WHITE layouts, the direction rule and the screen conventions come from **maqam-dev** (SLOOP maqam scales, GPL-3.0). The PSYCH and JINS sets come from maqam-dev's pull request #4.
+- Turkish: Arel-Ezgi-Uzdilek system (Pythagorean ratios). Arabic: al-Ṣabbāgh (1954), Touma, *The Music of the Arabs*, maqamworld.com. Indian: just-intonation swara ratios (Bor (ed.), *The Raga Guide*). PSYCH / JINS: The Pop Descriptivist, "The Microtonal Scales of King Gizzard and the Lizard Wizard (a Primer and Compendium)", 2024; maqamworld.com; Wikipedia ("Acemli Rast", "Darbari Kanada"); Farhat, *The Dastgah Concept in Persian Music*. Each scale's source is cited in `scales/*.txt` and `scales/README.md`.
+- Everything on this page is checked by host tests: `tests/host/pages_test.c`, `names_test.c`, `keys_test.c`, `maqam_test.c` (see `tests/host/README.md`).
