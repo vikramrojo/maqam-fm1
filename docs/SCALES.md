@@ -146,10 +146,6 @@ All four are the selected track's own. The page shows the last chord played on t
 
 ---
 
-### The scale tag
-
-On the overview and step pages the header shows the selected track's scale at the right, under the mode box: the spelled root and the scale name cut to four characters, `Ed RAST` (`pages_test` "Rast on Ed"). It is hidden for WEST chromatic and for drum tracks, and a hand-edited table shows `CUST`.
-
 ## 4b. Chord mode
 
 With chord mode on (CHORD page, K1), a key plays the chord **built from the track's scale on that key's degree**, like a Polyend chord mode: the chord's quality comes from the scale. Keys keep their own pitch; a key that is not a degree plays the chord of the degree it snaps to (as SNAP). Drum tracks, CUSTOM tables and WEST chromatic play single notes.
@@ -159,7 +155,7 @@ With chord mode on (CHORD page, K1), a key plays the chord **built from the trac
 - **Hüseyni on A, DRN:** the B key plays A2 under B-half-flat 3 (see drones below). **Pentatonic** scales stack within their own degrees: C pentatonic TRIAD is C E A.
 - The degrees are counted in the ascending form unless the degree belongs only to the descending form. Every type works on every scale and root (`chords_test` "exhaustive").
 
-**Inversions (K3).** 1ST, 2ND, 3RD move the lowest one, two or three notes up an octave (C major 1ST = E G C). **AUTO** picks the inversion and octave closest to the previous chord on the track, so progressions move smoothly: C then F plays C4 F4 A4 (`chords_test` "voicing").
+**Inversions (K3).** 1ST, 2ND, 3RD move the lowest one, two or three notes up an octave (C major 1ST = E G C). **AUTO** acts as ROOT on these types: the F chord in WEST major on C with TRIAD and AUTO is F A C (65 69 72), whatever came before (`chords_test` "voicing"). AUTO's steady pedal is for the drones, below.
 
 **Drones (DRN, DRN5).** The played note over a pedal on the scale's tonic: `DRN` is tonic + note, `DRN5` is tonic + the scale's fifth + note. King Gizzard's microtonal riffs are single-note lines over a part chugging on the tonic in the pocket, and a maqam sits over its drone the same way. The pedal and the fifth use the keys the scale's key assignment gives them, so they sound at the scale's tuning, and the played note is the key's own (or its SNAP target). INV places the pedal instead of inverting:
 
@@ -168,9 +164,9 @@ With chord mode on (CHORD page, K1), a key plays the chord **built from the trac
 | ROOT | the highest tonic at least an octave below the note |
 | 1ST | the highest tonic below the note (an octave below when the note is the tonic) |
 | 2ND, 3RD | the lowest tonic above the note (an octave above when the note is the tonic); DRN5's fifth sits above it |
-| AUTO | the previous drone chord's pedal on the track while it stays below the note, else ROOT; the first is ROOT |
+| AUTO | the previous drone chord's pedal on the track while it stays below the note, else ROOT; the first is ROOT. A change of the track's scale or root forgets the pedal |
 
-BASS adds the pedal an octave lower again; OPEN has no effect. Hüseyni on A, the B key (B-half-flat) in octave 3 (`chords_test` "drones"): DRN ROOT plays A2 + B-half-flat 3 (45 59), DRN5 ROOT A2 E3 B-half-flat 3 (45 52 59), DRN 1ST A3 + B-half-flat 3 (57 59), DRN 2ND B-half-flat 3 + A4 (59 69). In WEST major on C, DRN AUTO plays C4 then C5 over the same pedal C3 (48 60, 48 72), and DRN ROOT with BASS on E4 plays C2 C3 E4 (36 48 64). Every scale, root and placement is checked in `chords_test` "exhaustive drones".
+BASS adds the pedal an octave lower again; OPEN has no effect. Hüseyni on A, the B key (B-half-flat) in octave 3 (`chords_test` "drones"): DRN ROOT plays A2 + B-half-flat 3 (45 59), DRN5 ROOT A2 E3 B-half-flat 3 (45 52 59), DRN 1ST A3 + B-half-flat 3 (57 59), DRN 2ND B-half-flat 3 + A4 (59 69). In WEST major on C, DRN AUTO plays C4 then C5 over the same pedal C3 (48 60, 48 72), and DRN ROOT with BASS on E4 plays C2 C3 E4 (36 48 64). After a root change the pedal follows: DRN AUTO plays C4 in WEST major on C (pedal C3), the root becomes D, and E4 plays over D3 (50 64), not the old C3; a track's own root does the same (`chords_test` "drones"). Every scale, root and placement is checked in `chords_test` "exhaustive drones", run in sequence without resets between cases.
 
 **Voicing (K4).** OPEN moves the second note up an octave; BASS adds the lowest note an octave below (C4 triad + C3). A chord has at most 8 notes.
 
@@ -178,7 +174,7 @@ BASS adds the pedal an octave lower again; OPEN has no effect. Hüseyni on A, th
 
 **Recording.** Chord-mode playing records each chord on its step through the engine's own chord recording (`chords_test` "recording"). Chords use the project's 16-slot chord table; identical shapes share a slot. When the table is full the engine shows `CHORD LIMIT - LAST NOTES KEPT`: the step keeps the notes that fit, usually just the first note of the chord. Use fewer chord types per project if this happens. A recorded chord keeps its notes when the scale changes later; its name follows the new tuning.
 
-**Names.** Chords are named from the cents they sound, rounded to quarter tones, on the CHORD page and on the step page's CHORD knob: triads `SUB` `MIN` `NEU` `MAJ` `SUP` (by the third; `-` for a 600/650 c fifth, `+` for 750/800 c), sevenths `NEU7`, `MAJ7`, `DOM7` ..., and `5TH`, `8VA`, `5+8`, `SUS2`, `SUS4`, `ADD9`, drones `+NNN`, else `CUST`. A two-note chord, or three notes whose lowest two are 700 c apart, that is none of the others reads as its top note's interval over the lowest, within an octave, in cents: DRN plays C3 under E-half-flat 4 in Rast `+350`, DRN5 on A in Hüseyni `+150`, while an OPEN C major triad (C G E) is still `MAJ` (`chords_test` "names"). The same C-E-G stack reads `NEU` on a Rast track and `MAJ` in WEST major; inversions keep their name (`chords_test` "names").
+**Names.** Chords are named from the cents they sound, rounded to quarter tones, on the CHORD page only (the step page's CHORD knob keeps the stock names): triads `SUB` `MIN` `NEU` `MAJ` `SUP` (by the third; `-` for a 600/650 c fifth, `+` for 750/800 c), sevenths `NEU7`, `MAJ7`, `DOM7` ..., and `5TH`, `8VA`, `5+8`, `SUS2`, `SUS4`, `ADD9`, drones `+NNN`, else `CUST`. A chord that is none of the others, in which every note but one is the track's tonic or the scale's fifth above it (any octave, at least one tonic), reads as the remaining note's interval above the tonic, reduced to an octave, in cents. That is how drones read, whatever the pedal's octave or doubling: DRN plays C3 under E-half-flat 4 in Rast `+350`; DRN with BASS on E4 in WEST major (C2 C3 E4) `+400`; DRN5 on A in Hüseyni `+150`, and so does the high drone B-half-flat 3, A4, E5 (2ND); an OPEN C major triad (C G E) is still `MAJ` (`chords_test` "names"). The same C-E-G stack reads `NEU` on a Rast track and `MAJ` in WEST major; inversions keep their name (`chords_test` "names").
 
 **Saving.** Each track's chord-mode on/off is saved. Only one set of type (any of the eight, DRN5 included), inversion and voicing fits in the project: the lowest-numbered chord-mode track's. After loading, every track has that set (`maqam_test` "chord trailer").
 

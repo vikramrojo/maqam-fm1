@@ -241,51 +241,6 @@ static void frame_cycling(void)
     printf("frame: header and hint unchanged across SCL cycling, the section row changes\n");
 }
 
-static void header_tag(void)
-{
-    char t[12];
-    sim_boot(1);
-    maqam_init();
-    ms(50);
-    CHECK(!maqam_header_tag(0, t) && !t[0]);                      /* WEST chromatic: hidden */
-    maqam_set_project(find("RAST"), 7);
-    CHECK(maqam_header_tag(0, t));
-    has("Rast on Ed", t, "E" MAQAM_HF " RAST");
-    CHECK(!strcmp(t, "E" MAQAM_HF " Rast") || !strcmp(t, "E" MAQAM_HF " RAST"));
-    CHECK(!maqam_header_tag(7, t));                                /* drums: hidden */
-    maqam_set_project(find("SIKAH"), 0);
-    CHECK(maqam_header_tag(0, t));
-    has("scale name cut to 4", t, "C SIKA");
-    CHECK(strlen(t) == 6);
-    maqam_set_project(find("RAST"), 7);
-    ms(300);
-    shot("scale_overview_tag");
-    CHECK(ink(190, 20, 42, 7) > 30);                               /* the tag is painted at the right of the header */
-    unsigned rast = hash_rect(190, 20, 42, 7);
-    maqam_set_project(find("BAYAT"), 4);
-    ms(300);
-    CHECK(hash_rect(190, 20, 42, 7) != rast);                      /* redraws when the scale changes */
-    maqam_set_project(find("CHR"), 0);
-    ms(300);
-    CHECK(ink(190, 20, 42, 7) == 0);                               /* chromatic: cleared */
-    maqam_set_project(find("RAST"), 7);
-    btn(SEQ); ms(300);
-    CHECK(page() == 1 && ink(190, 20, 42, 7) > 30);                /* the step page too */
-    shot("scale_steps_tag");
-    /* a CUSTOM table */
-    struct groove_tuning g;
-    tables(0, &g);
-    g.main[1] = 17;
-    CHECK(groove_tuning_set(0, &g) == 0);
-    maqam_refresh();
-    CHECK(maqam_header_tag(0, t));
-    has("CUSTOM", t, "CUST");
-    CHECK(!strcmp(t, "CUST"));
-    btn(SCL); ms(300);                                             /* scale pages carry no tag */
-    CHECK(page() == PAGE_SCALE);
-    printf("header tag: Ed RAST, hidden for CHR and drums, SIKA cut, CUST, repaints on change\n");
-}
-
 static void scale_page(void)
 {
     boot();
@@ -967,7 +922,6 @@ static void chord_page(void)
 int main(void)
 {
     navigation();
-    header_tag();
     frame_cycling();
     scale_page();
     scopes();

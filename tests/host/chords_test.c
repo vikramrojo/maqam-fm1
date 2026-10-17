@@ -114,8 +114,7 @@ static void drones_all(void)
             for (unsigned type = MAQAM_CHORD_DRN; type < MAQAM_CHORD_TYPES; ++type)
                 for (unsigned inv = 0; inv <= MAQAM_INV_AUTO; ++inv)
                     for (unsigned v = 0; v < 3; v += 2) {
-                        maqam_chords_reset();
-                        conf(type, inv, v);
+                        conf(type, inv, v);   /* no reset between cases: a root change forgets the pedal itself */
                         for (unsigned slot = 0; slot < 24; ++slot) {
                             if (key[slot] < 0) continue;
                             for (unsigned oct = 0; oct < 2; ++oct) {
@@ -227,6 +226,23 @@ static void drones(void)
     /* BASS adds the pedal an octave lower */
     conf(MAQAM_CHORD_DRN, MAQAM_INV_ROOT, MAQAM_VOICE_BASS);
     SAYS(64, 0, "36 48 64");
+    /* a new root, a new pedal: the previous drone chord is forgotten */
+    boot("MAJ", 0);
+    conf(MAQAM_CHORD_DRN, MAQAM_INV_AUTO, MAQAM_VOICE_CLOSE);
+    n = maqam_chord_notes(0, 60, 0, c);
+    CHECK(n == 2 && c[0] == 48 && c[1] == 60);
+    maqam_chord_commit(0, c, n);
+    CHECK(maqam_set_project(find("MAJ"), 4) == 0);   /* the root becomes D (quarter tone 4) */
+    n = maqam_chord_notes(0, 64, 0, c);
+    CHECK(n == 2 && c[0] == 50 && c[1] == 64);       /* E4 over D3, not over the stale C3 */
+    /* a track's own scale or root forgets it too */
+    boot("MAJ", 0);
+    conf(MAQAM_CHORD_DRN, MAQAM_INV_AUTO, MAQAM_VOICE_CLOSE);
+    n = maqam_chord_notes(0, 60, 0, c);
+    maqam_chord_commit(0, c, n);
+    CHECK(maqam_set_override(0, find("MAJ"), 14) == 0);   /* G */
+    n = maqam_chord_notes(0, 72, 0, c);
+    CHECK(n == 2 && c[0] == 55 && c[1] == 72);            /* G3, not the stale C3 */
     printf("drones: DRN/DRN5 over A in Huseyni, ROOT/1ST/2ND placement, AUTO steady pedal, BASS, OPEN ignored\n");
 }
 
@@ -260,18 +276,18 @@ static void voicing(void)
     SAYS(0, 0, "0 4 7");
     conf(MAQAM_CHORD_TRIAD, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE);
     SAYS(124, 0, "124 127");                       /* E G B: the B above 127 is dropped */
-    /* AUTO: the first chord is in root position, then the inversion and octave nearest the last chord */
-    conf(MAQAM_CHORD_TRIAD, MAQAM_INV_AUTO, MAQAM_VOICE_CLOSE);
-    maqam_chords_reset();
+    /* AUTO on a stacked chord acts as ROOT: no voice leading */
     conf(MAQAM_CHORD_TRIAD, MAQAM_INV_AUTO, MAQAM_VOICE_CLOSE);
     uint8_t c[8];
     unsigned n = maqam_chord_notes(0, 60, 0, c);
     CHECK(n == 3 && c[0] == 60 && c[1] == 64 && c[2] == 67);
     maqam_chord_commit(0, c, n);
-    SAYS(65, 0, "60 65 69");                       /* F chord as C F A, not F A C */
+    SAYS(65, 0, "65 69 72");                       /* the F chord in root position: F A C */
     n = maqam_chord_notes(0, 65, 0, c);
     maqam_chord_commit(0, c, n);
-    SAYS(67, 0, "59 62 67");                       /* then G: B D G, nearest C F A */
+    SAYS(67, 0, "67 71 74");                       /* G B D, whatever came before */
+    conf(MAQAM_CHORD_7TH, MAQAM_INV_AUTO, MAQAM_VOICE_BASS);
+    SAYS(65, 0, "53 65 69 72 76");                 /* and the voicing still applies */
     /* never more than 8 notes, in range, ascending, for every setting on every scale */
     unsigned bad = 0, total = 0;
     for (unsigned s = 0; s < NSCALES; ++s) {
@@ -293,7 +309,7 @@ static void voicing(void)
                 }
     }
     CHECK(bad == 0 && total > 1000);
-    printf("voicing: 1ST/2ND/3RD, AUTO C->F = C4 F4 A4, BASS, OPEN, clamps, <=8 notes in range (%u chords)\n", total);
+    printf("voicing: 1ST/2ND/3RD, AUTO on a stacked chord = ROOT, BASS, OPEN, clamps, <=8 notes in range (%u chords)\n", total);
 }
 
 /* ---- keys: the real screen.c ---- */
@@ -543,6 +559,20 @@ static void names(void)
     NAMED(0, "+350", 36, 64);                  /* Rast C3 under E-half-flat 4 */
     boot("P.HUS", 18);
     NAMED(0, "+150", 45, 52, 59);              /* DRN5 on A: A2 E3 B-half-flat 3 */
+    NAMED(0, "+150", 59, 69, 76);              /* a high drone: B-half-flat 3, A4, E5 (DRN5 in 2ND) */
+    boot("MAJ", 0);
+    NAMED(0, "+400", 36, 48, 64);              /* a doubled pedal (BASS): C2 C3 E4 */
+    NAMED(0, "CUST", 62, 64);                  /* no tonic among them: no drone */
+    NAMED(0, "+700", 36, 48, 79);              /* the odd note names itself over the tonic, reduced */
+    {   /* what the drone types actually play reads the same */
+        uint8_t n[8];
+        conf(MAQAM_CHORD_DRN, MAQAM_INV_ROOT, MAQAM_VOICE_BASS);
+        unsigned c = maqam_chord_notes(0, 64, 0, n);
+        CHECK(c == 3 && !strcmp(named(0, c, n), "+400"));
+        conf(MAQAM_CHORD_DRN5, MAQAM_INV_2ND, MAQAM_VOICE_CLOSE);
+        c = maqam_chord_notes(0, 62, 0, n);
+        CHECK(c == 3 && !strcmp(named(0, c, n), "+200"));
+    }
     boot("MAJ", 0);
     NAMED(0, "MAJ", 60, 67, 76);               /* an OPEN triad is not a drone */
     NAMED(0, "+0", 60, 84);
@@ -559,21 +589,7 @@ static void names(void)
         const char *got = named(0, c, n);
         if (strcmp(got, stock[id])) { printf("FAIL stock chord %u: '%s' want '%s'\n", id, got, stock[id]); ++failures; }
     }
-    /* the step page: melodic tracks get interval names, drum tracks keep the stock name */
-    boot("RAST", 0);
-    char v[12] = "MAJOR";
-    uint8_t cm[3] = {60, 64, 67};
-    CHECK(groove_sequence_chord(0, 0, cm, 3, 100) == 0);
-    maqam_step_chord_name(0, 0, v);
-    CHECK(!strcmp(v, "NEU"));
-    strcpy(v, "SINGLE");
-    maqam_step_chord_name(0, 1, v);
-    CHECK(!strcmp(v, "SINGLE"));
-    CHECK(sim_select(0, GROOVE_808) == 0);
-    strcpy(v, "MAJOR");
-    maqam_step_chord_name(0, 0, v);
-    CHECK(!strcmp(v, "MAJOR"));
-    printf("names: NEU/MAJ by tuning, MIN-, inversions, sevenths, fixed shapes, drones, 12 stock chords, step page\n");
+    printf("names: NEU/MAJ by tuning, MIN-, inversions, sevenths, fixed shapes, drones, 12 stock chords\n");
 }
 
 int main(void)
