@@ -1,0 +1,133 @@
+# Build the FM1 firmware with the SDK-pinned JieLi toolchain and the complete
+# workbench. Artifacts: this run -> Artifacts.
+name: firmware
+
+on:
+  push:
+    branches: ['vikramrojo/feat-maqam-scales', 'vikramrojo/feat-maqam-**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      # JieLi installer 2.5.2 holds "JieLi PI32v2 clang 4.0.1 r3": all 22 files
+      # match sdk/manifest.json external_toolchain (Build.ps1 re-checks them).
+      JL_INSTALLER_URL: https://jl-update.oss-cn-shenzhen.aliyuncs.com/2.5.2.exe
+      JL_INSTALLER_SHA256: 1ec78e3315a5987d4e82ecd002536c84240e5c832b1875beff7ce55450124ee5
+      FM1_PI32_TOOLCHAIN: C:\jl\pi32   # actions/cache refuses paths with '..'
+      FM1_SOURCE_URL: https://github.com/${{ github.repository }}/archive/${{ github.sha }}.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache toolchain
+        id: tc
+        uses: actions/cache@v4
+        with:
+          path: C:\jl
+          key: jieli-pi32-2.5.2-${{ env.JL_INSTALLER_SHA256 }}
+
+      - name: JieLi toolchain
+        if: steps.tc.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:RUNNER_TEMP 'jl.exe'
+          for ($i = 1; $i -le 5; $i++) {
+            try { Invoke-WebRequest -Uri $env:JL_INSTALLER_URL -OutFile $exe; break }
+            catch { if ($i -eq 5) { throw }; Start-Sleep -Seconds (20 * $i) }
+          }
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -cne $env:JL_INSTALLER_SHA256) { throw "Installer SHA-256 mismatch: $hash" }
+          choco install innoextract -y --no-progress | Out-Null
+          $out = Join-Path $env:RUNNER_TEMP 'jlx'
+          innoextract -s -d $out $exe
+          if ($LASTEXITCODE) { throw 'innoextract failed' }
+          $pi32 = Get-ChildItem -Path $out -Recurse -Directory -Filter pi32 |
+            Where-Object { Test-Path (Join-Path $_.FullName 'bin/clang.exe') } | Select-Object -First 1
+          if (!$pi32) { throw 'pi32 toolchain not found in installer' }
+          $dest = 'C:\jl'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          Move-Item $pi32.FullName (Join-Path $dest 'pi32')
+
+      - name: Firmware and workbench (build.bat --package)
+        shell: cmd
+        run: build.bat --package
+
+      - name: Size report (largest symbols in the linked firmware)
+        if: always()
+        shell: pwsh
+        run: |
+          $elf = 'build/dx7/sdk.elf'
+          if (!(Test-Path $elf)) { Write-Host 'no sdk.elf'; exit 0 }
+          $nm = Join-Path $env:FM1_PI32_TOOLCHAIN 'bin/llvm-nm.exe'
+          $rows = & $nm --print-size --size-sort --radix=d $elf 2>$null |
+            ForEach-Object { $f = -split $_; if ($f.Count -ge 4) { [pscustomobject]@{size=[int]$f[1]; type=$f[2]; name=$f[3]} } }
+          Write-Host '== largest 60 symbols'
+          $rows | Sort-Object size -Descending | Select-Object -First 60 | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+          Write-Host '== maqam / screen / project symbols, by size'
+          $app = $rows | Where-Object { $_.name -match 'maqam|scale|screen|project|names|pages|keys|SCALES|draw|text' }
+          $app | Sort-Object size -Descending | Select-Object -First 80 | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+          Write-Host ('maqam_* total: ' + (($rows | Where-Object { $_.name -match '^maqam_|SCALES|SCALE_CODES|SET_NAMES' } | Measure-Object size -Sum).Sum))
+
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          $fw = 'build/dx7/generated/FM1_OFFICIAL_OPEN.fwsc'
+          $lines = @('## Firmware build', '')
+          if (Test-Path $fw) {
+            $h = (Get-FileHash $fw -Algorithm SHA256).Hash.ToLowerInvariant()
+            $lines += "- ``FM1_OFFICIAL_OPEN.fwsc``: $((Get-Item $fw).Length) bytes, sha256 ``$($h.Substring(0,16))...``"
+          } else { $lines += '- **No firmware: the build failed** (see the log).' }
+          $lines += '', 'Back up projects and samples before flashing.'
+          $lines -join "`n" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('build/dx7/generated/*.fwsc') != ''
+        with:
+          name: firmware-${{ github.sha }}
+          path: |
+            build/dx7/generated/*.fwsc
+            build/official-web/
+          retention-days: 30
+
+  host-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build host engine and tests (-Werror)
+        run: tests/host/build.sh
+
+      - name: Scale library is valid and app/maqam/scales.h is up to date
+        run: sh tools/check_scales.sh
+
+      - name: Pitch test
+        run: build/host/fm1_host pitch-test
+
+      - name: Unit tests
+        run: |
+          set -e
+          for t in build/host/*_test; do
+            echo "== $t"
+            "$t"
+          done
+
+      - name: Determinism (render twice, compare)
+        run: tests/host/check_golden.sh --determinism
+
+      # Goldens are compiler- and CPU-specific; they were recorded on macOS.
+      - name: Golden hashes (macOS only, advisory)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: tests/host/check_golden.sh

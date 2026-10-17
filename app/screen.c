@@ -3,6 +3,7 @@
 #include "fm_patch.h"
 #include "version.h"
 #include "fm1_engine_control.h"
+#include "maqam/maqam.h" /* maqam: */
 #include <string.h>
 enum {
     BACK = 0x0000,
@@ -72,7 +73,10 @@ static const uint8_t punctuation[][6] = {
     {64,0x32,0x49,0x79,0x41,0x3e}, {91,0,0x7f,0x41,0x41,0},
     {92,1,6,0x18,0x60,0}, {93,0,0x41,0x41,0x7f,0}, {94,4,2,1,2,4},
     {95,0x40,0x40,0x40,0x40,0x40}, {96,0,1,2,4,0}, {123,0,8,0x36,0x41,0},
-    {124,0,0,0x7f,0,0}, {125,0,0x41,0x36,8,0}, {126,8,4,8,0x10,8}
+    {124,0,0,0x7f,0,0}, {125,0,0x41,0x36,8,0}, {126,8,4,8,0x10,8},
+    {24,4,2,0x7f,2,4}, {25,0x10,0x20,0x7f,0x20,0x10}, /* maqam: up / down arrows */
+    {26,0x38,0x44,0x44,0x44,0x7f}, /* maqam: lowercase d, the half-flat in 24-tone names */
+    {27,0x7f,0x44,0x44,0x44,0x38} /* maqam: lowercase b, the flat */
 };
 static void text(unsigned x, unsigned y, const char *s, unsigned scale, uint16_t color,
                  uint16_t background)
@@ -147,7 +151,7 @@ static void text(unsigned x, unsigned y, const char *s, unsigned scale, uint16_t
 }
 /* Eight tracks stay visible on HOME. SEQ maps the sixteen white keys to one
  * quarter of the 64-step pattern. All drawing and edits run on app_control. */
-enum { OVERVIEW, STEPS, FM_EDIT, FM_ENV, FM_LFO, TONE_EDIT, MIX, BLE, PROJECT, NAME, EFFECTS, SOURCE, ACTIONS, STEP_EDIT, RHYTHM, FM_QUICK, PRESET_BROWSER, ARP_EDIT, STARTUP };
+enum { OVERVIEW, STEPS, FM_EDIT, FM_ENV, FM_LFO, TONE_EDIT, MIX, BLE, PROJECT, NAME, EFFECTS, SOURCE, ACTIONS, STEP_EDIT, RHYTHM, FM_QUICK, PRESET_BROWSER, ARP_EDIT, STARTUP, SCALE_PAGE /* maqam: */ };
 enum { OCT_DOWN, OCT_UP, FX, SCL, ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, SEQ, PLAY, REC };
 #define BUTTON(b) (1U << (b))
 static const uint16_t colors[8] = {0x3c9f, 0x07bf, 0x4eae, 0x06d4, 0xac9f, 0xed18, 0xff06, 0xfba5};
@@ -268,6 +272,8 @@ static uint32_t led_cache;
 static uint16_t button_led_cache;
 static struct groove_view frame_views[GROOVE_TRACKS];
 static uint8_t frame_step_notes[16], frame_effects[4];
+static uint16_t frame_step_alt; /* maqam: bit i = tile i is an alt step */
+static struct maqam_view frame_scale; /* maqam: the scale page */
 static uint8_t frame_patch[156];
 static struct groove_fm_controls frame_controls;
 static struct fm1_ble_device frame_devices[FM1_BLE_MAX_DEVICES];
@@ -603,7 +609,8 @@ static void step_knob(unsigned col, unsigned bank)
     else if (setting == 4) strcpy(value, v ? "ON" : "OFF");
     else if (setting == 5 && !v) strcpy(value, "OFF");
     else if (setting < 7) decimal(value, v, 1);
-    else { struct groove_view view = {0}; groove_get_view(track, cursor, &view); note_name(view.step.note, value); }
+    else { struct groove_view view = {0}; groove_get_view(track, cursor, &view);
+        maqam_note_name(track, view.step.note, view.step.drums & GROOVE_STEP_ALT, value); /* maqam: 24-tone name, alt mark */ }
     if (groove_pad_count(track) && (setting == 1 || setting == 3 || setting == 4 || setting == 7)) strcpy(value, "--");
     knob(col, labels[setting], value, colors[col]);
 }
@@ -659,16 +666,35 @@ static __attribute__((noinline)) void steps(const struct groove_view *v)
         }
     }
     uint64_t lane = groove_pad_count(track) != 0 ? groove_drum_steps(track, drum) : v->active_steps;
+    /* maqam: the name of a tile depends on the track's scale, root and table entry; it is formatted on a cache miss only */
+    struct groove_tuning tuning = {{0}, {0}};
+    uint8_t name_key[4] = {MAQAM_CUSTOM, 0, 0, 0};
+    if (maqam_melodic(track)) {
+        maqam_engine_get(track, &tuning);
+        name_key[0] = (uint8_t)maqam_track_scale(track);
+        name_key[1] = (uint8_t)maqam_track_root(track);
+    }
     for (unsigned i = 0; i < 16; ++i) {
         unsigned step = first + i;
         unsigned x = 8 + (i % 4) * 57, y = 72 + (i / 4) * 29;
         if (paint_rendering && (y >= paint_top + PAINT_ROWS || y + 25 <= paint_top)) continue;
         unsigned on = (unsigned)((lane >> step) & 1U), head = v->playing && v->play_step == step;
+        unsigned alt = (frame_step_alt >> i) & 1U;
         uint32_t sig = step | (on << 6) | (head << 7) | ((step == cursor) << 8) |
                        ((uint32_t)frame_step_notes[i] << 9) | (track << 16) | (drum << 19);
+        name_key[2] = (uint8_t)(alt ? tuning.alt : tuning.main)[frame_step_notes[i] % 12U];
+        name_key[3] = (uint8_t)alt;
+        sig = signature(sig, name_key, sizeof name_key);
         if (sig == cache->tile_cache[i])
             continue;
         cache->tile_cache[i] = sig;
+        char label[12];
+        if (!on)
+            strcpy(label, "-");
+        else if (groove_pad_count(track) != 0)
+            strcpy(label, "HIT");
+        else /* maqam: 24-tone name from the track's table (alt table and a '.' mark for alt steps) */
+            maqam_note_name(track, frame_step_notes[i], alt, label);
         uint16_t bg = on ? colors[track] : PANEL, fg = on ? BACK : TEXT;
         paint_fill(x, y, 53, 25, bg);
         if (step == cursor)
@@ -676,13 +702,6 @@ static __attribute__((noinline)) void steps(const struct groove_view *v)
         if (head)
             paint_fill(x, y, 53, 3, GREEN);
         number(x + 5, y + 5, step + 1, 2, 1, fg, bg);
-        char label[12];
-        if (!on)
-            strcpy(label, "-");
-        else if (groove_pad_count(track) != 0)
-            strcpy(label, "HIT");
-        else
-            note_name(frame_step_notes[i], label);
         text(x + 25, y + 14, label, 1, fg, bg);
     }
 }
@@ -1094,6 +1113,7 @@ static __attribute__((noinline)) void project_draw(void)
     if (cache->row_cache[1] == sig) return;
     cache->row_cache[1] = sig;
     const char *status = project_result == GROOVE_PROJECT_EMPTY     ? "NO VALID SAVE"
+                         : project_result == GROOVE_PROJECT_TUNING_SPACE ? "REDUCE SAMPLE BANK"
                          : project_result == GROOVE_PROJECT_MEMORY  ? "NOT ENOUGH MEMORY"
                          : project_result == GROOVE_PROJECT_INVALID ? "INVALID PROJECT"
                          : project_result == FM1_FLASH_BUSY         ? "FLASH BUSY - RETRY"
@@ -1206,10 +1226,12 @@ static void leds(const struct groove_view *v, unsigned visible)
             if (m.solo)
                 bits |= 1U << white_keys[t + 8];
         }
-    } else
+    } else {
         for (unsigned key = 0; key < 27; ++key)
             if (key_note[key] != 0xff)
                 bits |= 1U << key;
+        if (!navigation_mode()) bits |= maqam_key_lights(track); /* maqam: degree lights */
+    }
     if (visible == FM_EDIT) {
         for (unsigned i = 0; i < 10; ++i) bits &= ~(1U << edit_keys[i]);
         for (unsigned i = 0; i < 6; ++i)
@@ -1233,7 +1255,7 @@ static void leds(const struct groove_view *v, unsigned visible)
         | ((step_pages ? first + 16 < v->sequence_length : octave > 0) << OCT_UP)
         | ((visible == OVERVIEW) << HOME) | ((visible == EFFECTS) << FX)
         | ((groove_arp_enabled(track) != 0) << ARP)
-        | ((visible == FM_EDIT && (fm_group == 4 || fm_group == 5)) << SCL)
+        | (((visible == FM_EDIT && (fm_group == 4 || fm_group == 5)) || visible == SCALE_PAGE) << SCL)
         | ((visible == STEPS || visible == ACTIONS || visible == STEP_EDIT || visible == RHYTHM) << SEQ)
         | ((writing != 0) << REC)
         | ((v->playing != 0) << PLAY) | ((visible == MIX) << GLO)
@@ -1356,6 +1378,64 @@ static __attribute__((noinline, cold, minsize)) void boot_draw(void)
         paint_fill(58 + 16 * i, 166 - height[i] / 2, 12, height[i],
                    i < boot_phase ? colors[i] : PANEL);
 }
+/* maqam: the scale pages (app/maqam/pages.c builds the view; this only paints it). */
+static __attribute__((noinline, minsize)) void scale_draw(const struct maqam_view *m)
+{
+    uint32_t sig = signature(7U, m, sizeof *m);
+    sig = signature(sig, &track, sizeof track);
+    uint32_t row = (track << 4) | m->index;     /* the section row, as fm_draw's: T1 DX7  SCALE  1/2 */
+    if (cache->title_cache != row) {
+        static const char source[GROOVE_SOURCES][5] = {"DX7", "303", "808", "PSG", "PLUK", "SMPL"};
+        cache->title_cache = row;
+        paint_fill(0, 32, 240, 13, BACK);
+        char tn[3] = {'T', (char)('1' + track), 0};
+        text(8, 35, tn, 1, colors[track], BACK);
+        text(30, 35, source[groove_source_type(track)], 1, TEXT, BACK);
+        text(64, 35, m->title, 1, colors[track], BACK);
+        tn[0] = (char)('0' + m->index);
+        tn[1] = 0;
+        text(206, 35, tn, 1, TEXT, BACK);
+        text(212, 35, "/3", 1, DIM, BACK);
+    }
+    if (cache->middle_cache != sig) {
+        cache->middle_cache = sig;
+        paint_fill(0, 46, 240, 148, BACK);
+        text(8, 46, m->sub, strlen(m->sub) <= MAQAM_SUB_BIG ? 2 : 1, m->custom ? AMBER : TEXT, BACK);
+        text(8, 66, m->status, 1, colors[track], BACK);
+        text(8, 78, m->note, 1, DIM, BACK);
+        unsigned cells = m->ncell ? m->ncell : 12, w = cells > 9 ? 19 : 228 / cells; /* degree row: 5-9 cells fit 240 px */
+        unsigned cents = 0;                      /* an all-zero row (WEST) shows no cents */
+        for (unsigned i = 0; i < cells; ++i) cents |= m->cents[i] != 0;
+        cents &= m->tuned;
+        unsigned drop = cents && cells > 9 ? 6U : 0U; /* the staggered 12-key row is a line taller */
+        for (unsigned i = 0; i < cells; ++i) {
+            unsigned x = 6 + i * w, lit = (m->lit >> i) & 1U, root = (m->root >> i) & 1U, len = (unsigned)strlen(m->lab[i]);
+            uint16_t bg = lit ? colors[track] : PANEL;
+            paint_fill(x, 92, w - 1, 22, bg);
+            if (root) frame(x, 92, w - 1, 22, GREEN);
+            if ((m->sel >> i) & 1U) frame(x - 1, 91, w + 1, 24, ACCENT);
+            text(x + (w - 1 - 6 * len) / 2, 99, m->lab[i], 1, lit ? BACK : DIM, bg);
+            if (cents) {
+                int c = m->cents[i];
+                char out[12];
+                unsigned n = maqam_num(out, c, c > 0);
+                text((unsigned)((int)x + ((int)w - 6 * (int)n) / 2), 117 + (cells > 9 ? 9 * (i & 1U) : 0), out, 1, c ? TEXT : DIM, BACK); /* 12 cells: staggered, -127 is wider than its key */
+            }
+        }
+        for (unsigned i = 0; i < 2; ++i)          /* TRACK page: the alt and main readouts */
+            text(8, drop + (i ? 164U : 134U), m->line[i], 2 - i, i ? DIM : TEXT, BACK);
+        if (m->warn[0]) text(8, 182, m->warn, 1, AMBER, BACK);
+    }
+    for (unsigned i = 0; i < 4; ++i) {           /* values cut to 4 characters: always the large font */
+        char value[5] = {0};
+        strncpy(value, m->knob[i][1], 4);
+        knob(i, m->knob[i][0], value, colors[i]);
+    }
+    if (cache->hint_cache != 1U) {
+        cache->hint_cache = 1U;
+        text(6, 231, "SCL PAGE  SELECT TRACK  HOME BACK", 1, DIM, BACK);
+    }
+}
 static void draw_page_body(const struct fm1_ble_status *ble)
 {
     unsigned visible = boot_active ? STARTUP : glo_down && glo_used ? MIX : page;
@@ -1391,6 +1471,10 @@ static void draw_page_body(const struct fm1_ble_status *ble)
         return;
     }
     header(v);
+    if (visible == SCALE_PAGE) { /* maqam: the stock header stays, the section row and body are ours */
+        scale_draw(&frame_scale);
+        return;
+    }
     if (visible >= SOURCE) {
         edit_page_draw(visible);
         return;
@@ -1521,7 +1605,7 @@ static void draw_page_body(const struct fm1_ble_status *ble)
                 label = v->type == GROOVE_SAMPLE ? "SLOT" : "DRUM";
                 decimal(value, drum + 1, 2);
             } else if (col == 2)
-                note_name(selected_note, value);
+                maqam_note_name(track, selected_note, 0, value); /* maqam: 24-tone name */
             else if (v->clock_mode) {
                 label = "MIDI";
                 if (!v->tempo)
@@ -1603,8 +1687,11 @@ static void draw(const struct fm1_ble_status *ble)
             struct groove_view cell = {0};
             groove_get_view(track, first + i, &cell);
             frame_step_notes[i] = cell.step.note;
+            frame_step_alt = (uint16_t)((frame_step_alt & ~(1U << i)) | (((cell.step.drums & GROOVE_STEP_ALT) != 0) << i)); /* maqam: */
         }
     }
+    if (visible == SCALE_PAGE) /* maqam: */
+        maqam_page_view(track, &frame_scale);
     if (visible == EFFECTS) {
         groove_effects_get(frame_effects);
         if (!effects_page) {
@@ -1671,11 +1758,21 @@ static void paint_flush(void)
     paint_rendering = 0;
     cache = &saved_cache;
 }
+static __attribute__((minsize)) int chord_out(unsigned t, unsigned note, unsigned on) /* maqam: a chord note on/off */
+{
+    return post((uint8_t)((on ? 0x90 : 0x80) + groove_channel(t)), (uint8_t)note, on ? 100 : 0, 3);
+}
+/* maqam: the note-off of a held key: its chord (a note others hold stays) or its one note */
+static __attribute__((minsize)) int key_off(unsigned key)
+{
+    return maqam_chord_owned(key) ? maqam_chord_stop(key, chord_out) : chord_out(key_track[key], key_note[key], 0);
+}
 static int release_keys(void)
 {
+    maqam_chord_sync(key_note);
     for (unsigned key = 0; key < 27; ++key)
         if (key_note[key] != 0xff) {
-            if (!post((uint8_t)(0x80 + groove_channel(key_track[key])), key_note[key], 0, 3))
+            if (!key_off(key))
                 return 0;
             key_note[key] = 0xff;
         }
@@ -1796,6 +1893,25 @@ static void select_track(int delta)
         selected_note = groove_pad_note(track, drum);
     }
 }
+/* The stock SCL screen: DX7 level / rate scaling (FM_EDIT groups 4, 5), or the pitch page SCL opens on other sources. */
+static __attribute__((minsize)) unsigned stock_scl_page(void)
+{
+    return (page == FM_EDIT && (fm_group == 4 || fm_group == 5)) ||
+        (page == TONE_EDIT && advanced_edit && groove_source_type(track) != GROOVE_DX7 &&
+         tone_pages[track][tone_slot()] == (groove_source_type(track) == GROOVE_303 ? 1U : 0U));
+}
+static __attribute__((minsize)) void stock_scl_open(void)
+{
+    if (groove_source_type(track) == GROOVE_DX7) {
+        op = operator_selected[track] < 6 ? operator_selected[track] : 0;
+        operator_selected[track] = (uint8_t)op;
+        operator_page[track][op] = (uint8_t)(page == FM_EDIT && fm_group == 4 ? 5 : 4);
+        fm_group = operator_page[track][op]; page = FM_EDIT;
+    } else {
+        advanced_edit = 1; page = TONE_EDIT;
+        tone_pages[track][tone_slot()] = groove_source_type(track) == GROOVE_303 ? 1 : 0;
+    }
+}
 static int apply_controls(const struct fm1_controls *controls, uint32_t now,
                           const struct fm1_ble_status *ble)
 {
@@ -1870,6 +1986,7 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
     if ((controls->buttons & (BUTTON(HOME) | BUTTON(SAVE))) == (BUTTON(HOME) | BUTTON(SAVE)) &&
         (pressed & (BUTTON(HOME) | BUTTON(SAVE)))) {
         int r = groove_edit_undo();
+        maqam_refresh(); /* maqam: undo/redo restores the engine tables; re-derive the scale labels */
         notice = r ? "NOTHING TO UNDO / STOP REC FIRST" : "UNDO / REDO APPLIED";
         notice_until = now + 2000U;
         page = music_page;
@@ -1878,6 +1995,17 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
     if ((controls->buttons & (BUTTON(HOME) | BUTTON(GLO))) == (BUTTON(HOME) | BUTTON(GLO)) &&
         (pressed & (BUTTON(HOME) | BUTTON(GLO)))) {
         page = BLE; glo_down = glo_used = ble_view = ble_forget = ble_action = 0; ble_result = 0;
+        goto controls_done;
+    }
+    /* maqam: HOME+SCL toggles the scale pages and the stock SCL screen (SCL alone opens the scale pages).
+       HOME pressed first has already left its page by the time SCL arrives: toggle from the page HOME left. */
+    static unsigned home_page;
+    if (pressed & BUTTON(HOME)) home_page = page;
+    if ((controls->buttons & (BUTTON(HOME) | BUTTON(SCL))) == (BUTTON(HOME) | BUTTON(SCL)) &&
+        (pressed & (BUTTON(HOME) | BUTTON(SCL)))) {
+        if (!(pressed & BUTTON(HOME))) page = home_page;
+        if (stock_scl_page()) page = SCALE_PAGE; else stock_scl_open();
+        glo_down = glo_used = 0;
         goto controls_done;
     }
     /* Keep the original HOME+PRESETS shortcut, including after HOME opens
@@ -1933,16 +2061,10 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
         } else if (pressed & BUTTON(FX)) {
             if (page != EFFECTS) effects_page = 0;
             open_subpage(EFFECTS);
-        } else if (pressed & BUTTON(SCL)) {
-            if (groove_source_type(track) == GROOVE_DX7) {
-                op = operator_selected[track] < 6 ? operator_selected[track] : 0;
-                operator_selected[track] = (uint8_t)op;
-                operator_page[track][op] = (uint8_t)(page == FM_EDIT && fm_group == 4 ? 5 : 4);
-                fm_group = operator_page[track][op]; page = FM_EDIT;
-            } else {
-                advanced_edit = 1; page = TONE_EDIT;
-                tone_pages[track][tone_slot()] = groove_source_type(track) == GROOVE_303 ? 1 : 0;
-            }
+        } else if (pressed & BUTTON(SCL)) { /* maqam: SCL alone is the scale pages; on the stock SCL screen it stays stock */
+            if (page == SCALE_PAGE) maqam_page_next();
+            else if (stock_scl_page()) stock_scl_open();
+            else page = SCALE_PAGE;
         } else if (pressed & BUTTON(EDIT)) {
             unsigned edit = groove_source_type(track) == GROOVE_DX7 ? FM_QUICK : TONE_EDIT;
             edit_down = 1; edit_long = 0; edit_ms = now;
@@ -1979,7 +2101,12 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
         }
         goto controls_done;
     }
-    if (page != STEPS && page != ACTIONS)
+    /* maqam: on melodic tracks OCT held = alt hold, double tap = octave; otherwise stock. */
+    if (!maqam_oct_buttons(track, page != STEPS && page != ACTIONS,
+                           !!(controls->buttons & BUTTON(OCT_DOWN)) | (!!(controls->buttons & BUTTON(OCT_UP)) << 1),
+                           !!(pressed & BUTTON(OCT_DOWN)) | (!!(pressed & BUTTON(OCT_UP)) << 1),
+                           key_down != 0, now, &octave) &&
+        page != STEPS && page != ACTIONS)
         octave = clamp(octave + !!(pressed & BUTTON(OCT_UP)) - !!(pressed & BUTTON(OCT_DOWN)), -2, 2);
     if ((pressed & BUTTON(SAVE)) && page != PROJECT && page != BLE &&
         page != SOURCE && page != ACTIONS) {
@@ -2087,7 +2214,7 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
             }
             else if (action <= 10) r = groove_edit_clear(track, cursor, action - 8);
             else if (action <= 13) r = groove_edit_repeat(track, (action - 9) * 16);
-            else if (action == 14) r = groove_edit_undo();
+            else if (action == 14) { r = groove_edit_undo(); maqam_refresh(); /* maqam: */ }
             else if (action == 15) { r = groove_timbre_export(track, (uint8_t *)&tone_clip, sizeof tone_clip); tone_clip_ready = !r; }
             else if (action == 16) r = tone_clip_ready ? groove_timbre_import(track, (uint8_t *)&tone_clip, sizeof tone_clip) : -1;
             else if (action == 17) {
@@ -2146,6 +2273,9 @@ static int apply_controls(const struct fm1_controls *controls, uint32_t now,
             notice_until = now + 2000U;
             project_operation = 0;
         }
+    } else if (page == SCALE_PAGE) { /* maqam: */
+        select_track(controls->encoders[0]);
+        maqam_page_control(track, controls->encoders, key_down & ~blocked_keys);
     } else if (page == NAME) {
         name_cursor = (unsigned)clamp((int)name_cursor + controls->encoders[0], 0, 9);
         if (controls->encoders[2]) {
@@ -2466,14 +2596,31 @@ controls_done:
                 else toggle_step(first + i);
             }
     }
+    maqam_chord_sync(key_note); /* maqam: */
     for (unsigned key = 0; key < 27; ++key) {
         unsigned note = groove_key_note(track, key, octave);
+        if (maqam_melodic(track)) { /* maqam: layout + direction; a sounding key keeps its note */
+            if (key_note[key] != 0xff && key_track[key] == track) note = key_note[key];
+            else if (!mode && (keys & (1U << key))) /* a held key only follows the direction; only a new press moves it */
+                note = (key_down & (1U << key)) ? maqam_key_press(track, key, octave, now)
+                                                : maqam_key_note(track, key, octave, maqam_last_descending(track));
+        }
         if (key_note[key] != 0xff &&
             (mode || !(keys & (1U << key)) || key_note[key] != note || key_track[key] != track)) {
-            if (!post((uint8_t)(0x80 + groove_channel(key_track[key])), key_note[key], 0, 3))
+            if (!key_off(key)) /* maqam: */
                 return 0;
             key_note[key] = 0xff;
         }
+        if (!mode && note < 128 && (keys & (1U << key)) && key_note[key] == 0xff && maqam_melodic(track) &&
+            maqam_chord_start(key, track, note, maqam_last_descending(track))) { /* maqam: chord mode; the key's lowest note stands for it */
+            uint8_t first[8];
+            maqam_chord_last(track, first);
+            key_note[key] = first[0];
+            key_track[key] = (uint8_t)track;
+            selected_note = note;
+        }
+        if (!mode && (keys & (1U << key)) && maqam_chord_owned(key) && !maqam_chord_play(key, chord_out))
+            return 0; /* maqam: */
         if (!mode && note < 128 && (keys & (1U << key)) && key_note[key] == 0xff) {
             if (!post((uint8_t)(0x90 + groove_channel(track)), (uint8_t)note, 100, 3))
                 return 0;
