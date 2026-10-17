@@ -104,6 +104,7 @@ unsigned maqam_degree_name(unsigned scale, unsigned root, unsigned q, char out[4
 enum { MAQAM_SUBPAGES = 4 };
 struct maqam_view {
     char title[16];                  /* "1/4 PROJECT" */
+#define MAQAM_SUB_BIG 19                /* longest subtitle drawn in the large font */
     char sub[32];                    /* "Ed arab sikah trad" (arrow after the scale when its forms differ) */
     char status[40];                 /* "TRACK 3 FOLLOWS PROJECT" / OVERRIDE / CUSTOM TABLE */
     char note[28];                   /* "home: D" hint ("" for WEST scales) */

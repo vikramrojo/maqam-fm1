@@ -1377,10 +1377,14 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
         paint_fill(0, 30, 240, 164, BACK);
         paint_fill(132, 12, 108, 7, BACK);
         text(132, 12, m->title, 1, DIM, BACK);
-        text(8, 34, m->sub, strlen(m->sub) <= 19 ? 2 : 1, m->custom ? AMBER : TEXT, BACK);
+        text(8, 34, m->sub, strlen(m->sub) <= MAQAM_SUB_BIG ? 2 : 1, m->custom ? AMBER : TEXT, BACK);
         text(8, 54, m->status, 1, colors[track], BACK);
         text(8, 66, m->note, 1, DIM, BACK);
         unsigned cells = m->ncell ? m->ncell : 12, w = cells > 9 ? 19 : 228 / cells; /* degree row: 5-9 cells fit 240 px */
+        unsigned cents = 0;                      /* an all-zero row (WEST) shows no cents */
+        for (unsigned i = 0; i < cells; ++i) cents |= m->cents[i] != 0;
+        cents &= m->tuned;
+        unsigned drop = cents && cells > 9 ? 6U : 0U; /* the staggered 12-key row is a line taller */
         for (unsigned i = 0; i < cells; ++i) {
             unsigned x = 6 + i * w, lit = (m->lit >> i) & 1U, root = (m->root >> i) & 1U, len = (unsigned)strlen(m->lab[i]);
             uint16_t bg = lit ? colors[track] : PANEL;
@@ -1388,7 +1392,7 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
             if (root) frame(x, 80, w - 1, 22, GREEN);
             if ((m->sel >> i) & 1U) frame(x - 1, 79, w + 1, 24, ACCENT);
             text(x + (w - 1 - 6 * len) / 2, 87, m->lab[i], 1, lit ? BACK : DIM, bg);
-            if (m->tuned) {
+            if (cents) {
                 int c = m->cents[i];
                 char out[6];
                 unsigned n = maqam_cents_text(c, out);
@@ -1396,7 +1400,7 @@ static __attribute__((noinline)) void scale_draw(const struct maqam_view *m)
             }
         }
         for (unsigned i = 0; i < 3; ++i)
-            text(8, m->big ? (i ? 152U + 14U * (i - 1U) : 122U) : 124U + 14U * i, m->body[i],
+            text(8, drop + (m->big ? (i ? 152U + 14U * (i - 1U) : 122U) : 124U + 14U * i), m->body[i],
                  m->big && !i ? 2 : 1, i ? DIM : TEXT, BACK);
         if (m->warn[0]) text(8, 182, m->warn, 1, AMBER, BACK);
     }

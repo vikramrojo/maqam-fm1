@@ -159,3 +159,11 @@ the committed hashes.
 The degree row and the spelled alt strip (task 5.5) are covered by `pages_test` too: the Bayati row cells, cents and
 marks, the Rast row's `Bb` down and `Bd` up, one cell per degree for all 73 scales, the Bayati alt strip, and the
 PNGs `scale_row_bayati`, `scale_row_rast`, `scale_alt_bayati` and `steps_bb4` in `build/host/`.
+
+## Scale page screenshots
+
+`tests/host/scale_shots.c` renders edge cases of the scale pages (Rast up/down, Hijaz, Sikah on Ed, Suznak's
+9 degrees, pentatonic, chromatic, Bb major, a fallback root, quarter-tone roots, PSYCH, JINS, track override,
+CUSTOM, KEYS, ALT extremes, REDUCE SAMPLE BANK) to `build/host/shots/*.png`. It is not a test, so
+`build.sh` skips it; build it with the same command as a test, adding `tests/host/scale_shots.c` and
+`-I tests/host`, then run `build/host/scale_shots` from the repository root.
