@@ -457,7 +457,22 @@ static void staged(void)
         CHECK(ms(12)[2] == (committed ? 7 : 0));
         CHECK(!memcmp(entry(11), keep11, 16));
     }
-    printf("staged: a committed stage completes, an uncommitted one is dropped, other slots unaffected\n");
+    /* power lost mid-copy: the stage is committed and the sector already erased */
+    {
+        uint8_t *st = sector(STAGING);
+        uint32_t hdr[3] = {0x31514d46U, bcrc, 0U};
+        body[8 + 12 * 16 + 4 + 2] = 9; x = 0;
+        for (unsigned i = 0; i < 7; ++i) x ^= e12[4 + i];
+        e12[4 + 7] = (uint8_t)~x;
+        ecrc = ~groove_crc32(~0U, e12, 12); memcpy(e12 + 12, &ecrc, 4);
+        hdr[1] = ~groove_crc32(~0U, body, 8 + 16 * GROOVE_PROJECT_SLOTS);
+        memset(st, 0xff, SECTOR);
+        memcpy(st, hdr, HDR);
+        memcpy(st + HDR, body, 8 + 16 * GROOVE_PROJECT_SLOTS);
+        memset(sim_flash() + GROOVE_MAQAM_OFFSET, 0xff, SECTOR);
+        CHECK(groove_storage_prepare() == 0 && st[0] == 0xff && ms(12)[2] == 9 && !memcmp(entry(11), keep11, 16));
+    }
+    printf("staged: a committed stage completes (also over an erased sector), an uncommitted one is dropped, other slots unaffected\n");
 }
 static void chords(unsigned track, unsigned type, unsigned inv, unsigned voice)
 {
