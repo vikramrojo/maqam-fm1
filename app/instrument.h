@@ -229,7 +229,11 @@ int groove_project_import(const uint8_t *bytes, unsigned length);
 int groove_project_export(uint8_t *bytes, unsigned capacity);
 /* Read-only factory projects. Building only writes the caller's
  * snapshot; loading changes RAM and supports undo, never writes user slots. */
+#if defined(FM1_OPEN_WEB) /* maqam: the device keeps one DEFAULT (fork, app/presets.c) */
 enum { GROOVE_FACTORY_PROJECTS = 16 };
+#else
+enum { GROOVE_FACTORY_PROJECTS = 1 };
+#endif
 const char *groove_factory_name(unsigned index);
 int groove_factory_build(unsigned index, struct groove_project *project);
 int groove_factory_load(unsigned index);

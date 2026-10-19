@@ -5,6 +5,7 @@
 #include "sampledrum.h"
 #include <string.h>
 
+#if defined(FM1_OPEN_WEB) /* maqam: the demos build only for the web workbench (fork) */
 /* FM1 arrangements. Small musical recipes expand into the normal
  * editable project format, avoiding sixteen 4 KiB images in program Flash.
  * No random generation, engine allocation or live-state changes happen here.
@@ -283,3 +284,62 @@ int groove_factory_build(unsigned index, struct groove_project *p)
     }
     return groove_project_valid(p) ? 0 : GROOVE_PROJECT_INVALID;
 }
+#else
+/* maqam: device image (fork). The demos above are built only for the web
+ * workbench, which can send them to the device; this frees firmware space. The device keeps one blank
+ * project equal to the engine's start-up state: each source at its parameter
+ * defaults (PSG and pluck descriptors are not exported, so theirs are here). */
+const char *groove_factory_name(unsigned index)
+{
+    return index < GROOVE_FACTORY_PROJECTS ? "DEFAULT" : NULL;
+}
+int groove_factory_build(unsigned index, struct groove_project *p)
+{
+    if (!p || index >= GROOVE_FACTORY_PROJECTS) return GROOVE_PROJECT_INVALID;
+    static const uint8_t types[GROOVE_TRACKS] = {GROOVE_DX7, GROOVE_303, GROOVE_PSG, GROOVE_PLUCK,
+                                                 GROOVE_SAMPLE, GROOVE_DX7, GROOVE_303, GROOVE_808};
+    static const uint8_t effects[4] = {64, GROOVE_DELAY_DEFAULT, 48, 100};
+    static const uint8_t psg[4] = {0, 16, 24, 32}, pluck[4] = {90, 100, 24, 35};
+    memset(p, 0, sizeof *p);
+    memset(p->name, ' ', sizeof p->name); memcpy(p->name, "DEFAULT", 7);
+    p->tempo = 120; p->mute = (1U << 5) | (1U << 6);
+    memcpy(p->effects, effects, sizeof effects);
+    groove_sequence_defaults(&p->sequence);
+    groove_project_arp_defaults(p);
+    for (unsigned t = 0; t < GROOVE_TRACKS; ++t) {
+        struct groove_preset *v = &p->preset[t];
+        uint8_t *d = v->data;
+        v->type = types[t]; v->volume = 100; v->controls.envelope[2] = 100;
+        if (v->type != GROOVE_808 && v->type != GROOVE_SAMPLE)
+            for (unsigned i = 0; i < GROOVE_STEPS; ++i) p->step[t][i].note = 60; /* empty steps at C4 */
+        if (v->type == GROOVE_DX7) groove_fm_program(d, 0);
+        else if (v->type == GROOVE_303) {
+            for (int i = 0; i < BASS303_NPARAMS; ++i) d[i] = (uint8_t)bass303_param(i)->def;
+            v->program = d[BASS303_WAVE];
+        } else if (v->type == GROOVE_PSG) memcpy(d, psg, 4);
+        else if (v->type == GROOVE_PLUCK) memcpy(d, pluck, 4);
+        else if (v->type == GROOVE_SAMPLE) {
+            v->sampler_pads = SAMPLE_DRUM_PADS;
+            for (unsigned i = 0; i < SAMPLE_DRUM_PADS * SAMPLE_DRUM_PARAMS; ++i)
+                d[i] = (uint8_t)sampledrum_param(i % SAMPLE_DRUM_PARAMS)->def;
+            d[6 * SAMPLE_DRUM_PARAMS + SAMPLE_DRUM_CHOKE] = d[7 * SAMPLE_DRUM_PARAMS + SAMPLE_DRUM_CHOKE] = 1;
+        } else {
+            /* D8_PRESET_BYTES: sound selectors, then a parameter set per sound.
+             * Congas, claves and maracas (the second sounds of LT..CP) start
+             * with their own decays. */
+            static const uint8_t second_decay[5] = {58, 36, 34, 64, 51};
+            unsigned at = D8_NUM;
+            for (unsigned sound = 0; sound < 2; ++sound)
+                for (unsigned part = 0; part <= D8_NUM; ++part)
+                    for (int i = 0; i < drum808_nparams((int)part); ++i) {
+                        const fm1_param_t *k = drum808_param((int)part, i);
+                        unsigned value = strcmp(k->name, "Sound") ? k->def : sound;
+                        if (sound && part >= D8_LT && part <= D8_CP && !strcmp(k->name, "Decay"))
+                            value = second_decay[part - D8_LT];
+                        d[at++] = (uint8_t)value;
+                    }
+        }
+    }
+    return groove_project_valid(p) ? 0 : GROOVE_PROJECT_INVALID;
+}
+#endif
