@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */
-/* The device image's factory content (fork): app/presets.c built without FM1_OPEN_WEB keeps one DEFAULT
- * project that must equal what a freshly started device exports, byte for byte apart from its name, while
+/* The device image's factory content (fork): app/presets.c built without FM1_OPEN_WEB keeps one blank
+ * DEFAULT project (eight DX7 tracks with the unsaved-bank voice, a fresh device's shared settings), while
  * the web build keeps all 16 demos. presets.c is #included a second time without the web define, with its
  * two public functions renamed. Exits non-zero on failure. */
 #include "internal.h"
@@ -35,18 +35,19 @@ int main(void)
     CHECK(device_factory_build(1, p) < 0);
     CHECK(device_factory_build(0, p) == 0 && groove_project_valid(p));
     unsigned playing = 0;
+    uint8_t init[156];
+    groove_fm_factory(init, 0);                 /* the unsaved-bank voice (INIT VOICE on the device) */
     for (unsigned t = 0; t < GROOVE_TRACKS; ++t) {
-        CHECK(!p->preset[t].modified);
+        CHECK(p->preset[t].type == GROOVE_DX7 && !p->preset[t].modified && p->preset[t].volume == 100);
+        CHECK(!memcmp(p->preset[t].data, init, 156));
         for (unsigned i = 0; i < GROOVE_STEPS; ++i) playing |= p->step[t][i].velocity | p->step[t][i].drums;
     }
-    CHECK(!playing);
+    CHECK(!playing && !p->mute && p->tempo == 120);
+    /* the shared settings are a fresh device's */
     sim_boot(3);
     CHECK(groove_project_export((uint8_t *)boot, sizeof *boot) == 0);
-    memcpy(boot->name, p->name, sizeof p->name);
-    const uint8_t *a = (const uint8_t *)p, *b = (const uint8_t *)boot;
-    for (unsigned i = 0, shown = 0; i < sizeof *p && shown < 8; ++i)
-        if (a[i] != b[i]) { printf("byte %u: DEFAULT %u, start-up %u\n", i, a[i], b[i]); ++shown; }
-    CHECK(!memcmp(p, boot, sizeof *p));
+    CHECK(!memcmp(p->effects, boot->effects, sizeof p->effects) && p->tempo == boot->tempo);
+    CHECK(!memcmp(&p->sequence, &boot->sequence, sizeof p->sequence) && !memcmp(p->arp, boot->arp, sizeof p->arp));
     free(p); free(boot);
     /* unsaved library banks on the device play INIT VOICE: one full-level sine carrier, no detune */
     uint8_t v[156];
@@ -58,6 +59,6 @@ int main(void)
     groove_fm_factory(v, 0);
     CHECK(!memcmp(v + 145, "PIANO 1", 7));
     if (failures) { printf("default_test: %d failure(s)\n", failures); return 1; }
-    printf("default_test: DEFAULT equals the start-up project; INIT VOICE for unsaved banks; the web build keeps 16 demos and the V15 bank\n");
+    printf("default_test: DEFAULT is eight blank DX7 tracks; INIT VOICE for unsaved banks; the web build keeps 16 demos and the V15 bank\n");
     return 0;
 }
