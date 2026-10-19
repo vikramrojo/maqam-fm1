@@ -10,12 +10,15 @@
 #define groove_transfer_init t_transfer_init
 #define groove_transfer_poll t_transfer_poll
 #define fm1_midi_send t_midi_send
+#define fm1_midi_send_port t_midi_send_port
 int t_midi_send(const uint8_t *data, size_t bytes);
+int t_midi_send_port(unsigned port, const uint8_t *data, size_t bytes);
 #include "../../app/transfer.c"
 #undef fm1_app_sysex
 #undef groove_transfer_init
 #undef groove_transfer_poll
 #undef fm1_midi_send
+#undef fm1_midi_send_port
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -28,6 +31,9 @@ static int failures;
 
 static uint8_t last_reply[256];
 static unsigned last_reply_length;
+int t_midi_send(const uint8_t *data, size_t bytes);
+/* V14 replies on the request's port. */
+int t_midi_send_port(unsigned port, const uint8_t *data, size_t bytes) { (void)port; return t_midi_send(data, bytes); }
 int t_midi_send(const uint8_t *data, size_t bytes)
 {
     if (!data || !bytes || bytes > sizeof last_reply) return -1;
@@ -158,14 +164,16 @@ static unsigned install_bank(unsigned chunks, unsigned *bytes_out)
 /* ---- 5.2 ---- */
 static void sample_cap(void)
 {
-    CHECK(GROOVE_SAMPLE_LIMIT == 462848 && GROOVE_SAMPLE_BYTES == 466944);
+    /* V14: tuning sector, 4 library banks, then (maqam) one settings sector, all above the sample cap */
+    CHECK(GROOVE_SAMPLE_LIMIT == 442368 && GROOVE_SAMPLE_BYTES == 466944);
     CHECK(GROOVE_TUNING_OFFSET == GROOVE_FLASH_BYTES - 4096);
-    CHECK(GROOVE_TUNING_OFFSET == GROOVE_SAMPLE_OFFSET + GROOVE_SAMPLE_LIMIT);
+    CHECK(GROOVE_LIBRARY_OFFSET == GROOVE_TUNING_OFFSET - 4 * 4096);
+    CHECK(GROOVE_MAQAM_OFFSET == GROOVE_SAMPLE_OFFSET + GROOVE_SAMPLE_LIMIT);
     fresh();
-    CHECK(groove_samples_begin(462849) < 0);
+    CHECK(groove_samples_begin(442369) < 0);
     CHECK(groove_samples_begin(GROOVE_SAMPLE_BYTES) < 0);
     CHECK(groove_samples_begin(511) < 0);
-    CHECK(groove_samples_begin(462848) == 0);               /* exactly the cap */
+    CHECK(groove_samples_begin(442368) == 0);               /* exactly the cap */
     CHECK(groove_samples_status() == 3);
     groove_samples_cancel();
     /* SysEx cmd 11 still reports the full region: SDK clients require it. */
@@ -173,15 +181,18 @@ static void sample_cap(void)
     unsigned count = 0;
     CHECK(command(11, NULL, 0, out, &count) == 0 && count == 9);
     CHECK(get32(out + 5) == GROOVE_SAMPLE_BYTES);
+    /* command 21 keeps V14's value; command 22 reports the real upload limit */
+    CHECK(command(21, NULL, 0, out, &count) == 0 && count == 7 && get32(out + 3) == GROOVE_SAMPLE_BYTES - 4096);
+    CHECK(command(22, NULL, 0, out, &count) == 0 && count == 9 && get32(out + 4) == 442368);
 
     /* A bank at the largest size that fits validates and reads back. */
     fresh();
     unsigned bytes;
-    CHECK(install_bank(2027, &bytes) == 2 && bytes <= GROOVE_SAMPLE_LIMIT);
+    CHECK(install_bank(1937, &bytes) == 2 && bytes <= GROOVE_SAMPLE_LIMIT);
     CHECK(groove_samples_size() == bytes);
     /* An existing over-size bank (pre-cap) still validates and reads. */
     fresh();
-    CHECK(install_bank(2028, &bytes) == 2 && bytes > GROOVE_SAMPLE_LIMIT);
+    CHECK(install_bank(1938, &bytes) == 2 && bytes > GROOVE_SAMPLE_LIMIT);
     CHECK(groove_samples_size() == bytes);
     uint8_t got[64];
     CHECK(groove_samples_read(bytes - 64, got, 64) == 0);
@@ -441,7 +452,7 @@ static void legacy_upgrade(void)
     CHECK(groove_project_save_slot(2) == 0);                /* no sector yet */
     struct rec_header h;
     memcpy(&h, sim_flash() + 2 * 4096, sizeof h);
-    CHECK(h.magic == 0x35504d46U && h.target == 2);
+    CHECK(h.magic == 0x36504d46U && h.target == 2);               /* V14 project record (FMP6) */
     static uint8_t s[SECTOR_BYTES];
     memset(s, 0xff, sizeof s);
     memcpy(s, "FM1T", 4);

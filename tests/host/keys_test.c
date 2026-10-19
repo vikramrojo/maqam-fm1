@@ -31,6 +31,7 @@ static void boot(const char *scale, unsigned root, int layout)
 {
     sim_boot(1);
     maqam_init();
+    if (groove_source_type(0) == GROOVE_DX7) { uint8_t p[156]; init_voice(p); CHECK(groove_fm_import(0, p) == 0); }
     CHECK(maqam_set_project(find(scale), root) == 0);
     if (layout >= 0) CHECK(maqam_set_default_layout((unsigned)layout) == 0);
     ms(50);
