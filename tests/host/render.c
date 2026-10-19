@@ -101,6 +101,20 @@ static void tone_set(unsigned track, unsigned parameter, unsigned value)
     if (groove_tone_copy(track, 0, v) >= 0) groove_tone_edit(track, 0, parameter, (int)value - (int)v[parameter]);
 }
 
+/* The DX7 INIT VOICE: one sine carrier at ratio 1, no detune. The DX7 pitch check
+ * uses it rather than the default program, which on V14 is a detuned factory voice. */
+static void dx7_init_voice(uint8_t p[156])
+{
+    memset(p, 0, 156);
+    for (unsigned op = 0; op < 6; ++op) {
+        uint8_t *o = p + 21 * op;
+        memset(o, 99, 7); o[8] = 39; o[18] = 1; o[20] = 7;
+    }
+    p[5 * 21 + 16] = 99;
+    memset(p + 126, 99, 4); memset(p + 130, 50, 4);
+    p[136] = 1; p[137] = 35; p[141] = 1; p[143] = 3; p[144] = 24;
+    memcpy(p + 145, "INIT VOICE", 10); p[155] = 63;
+}
 /* Render one sustained voice of `source` on track 0 and return the measured
  * fundamental in Hz. All sends are zero and the mix is mono/centre after boot;
  * nothing but the engine's own tone shaping remains in the path. */
@@ -110,6 +124,7 @@ double measure_hz(unsigned source, unsigned note)
     static float pcm[BLOCKS * FM1_BLOCK_FRAMES];
     boot();
     if (groove_source_type(0) != source && groove_source_set(0, source)) return 0;
+    if (source == GROOVE_DX7) { uint8_t p[156]; dx7_init_voice(p); if (groove_fm_import(0, p)) return 0; }
     if (source == GROOVE_303) { /* stationary timbre: bright, no resonance or envelope sweep */
         tone_set(0, 0, 127); tone_set(0, 1, 0); tone_set(0, 2, 0);
     }
