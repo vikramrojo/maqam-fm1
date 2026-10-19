@@ -115,7 +115,7 @@ enum { MAQAM_CHORD_TRIAD, MAQAM_CHORD_7TH, MAQAM_CHORD_SUS2, MAQAM_CHORD_SUS4, M
        MAQAM_CHORD_DRN, MAQAM_CHORD_DRN5, MAQAM_CHORD_TYPES };
 enum { MAQAM_INV_ROOT, MAQAM_INV_1ST, MAQAM_INV_2ND, MAQAM_INV_3RD, MAQAM_INV_AUTO };
 enum { MAQAM_VOICE_CLOSE, MAQAM_VOICE_OPEN, MAQAM_VOICE_BASS };
-void maqam_chords_reset(void);                            /* settings, last chords and key ownership to defaults (not sounding notes) */
+void maqam_chords_reset(void);                            /* settings and last chords to defaults; held keys keep their chords */
 unsigned maqam_chord_get(unsigned track, unsigned field); /* 0 for a bad track or field */
 int maqam_chord_set(unsigned track, unsigned field, unsigned value); /* 0 ok, <0 bad argument */
 /* The chord (notes ascending, 0..127, at most 8; count returned, 0 = none) the track's type, inversion and voicing

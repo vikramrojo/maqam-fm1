@@ -383,6 +383,28 @@ static void sounding(void)
     printf("sounding: key plays C E G / F A C, chord mode off plays one note, owned while held, silent after\n");
 }
 
+/* V14 routing: chord notes follow the track's MIDI input channel; an OFF track plays nothing. */
+static void routing(void)
+{
+    boot("MAJ", 0);
+    conf(MAQAM_CHORD_TRIAD, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE);
+    CHECK(groove_midi_input_set(0, 4) == 0 && groove_midi_input_channel(0) == 4);
+    sim_control(1, 7, 1); ms(300);
+    listen(120);
+    double c4 = energy(60, 120), e4 = energy(64, 120), g4 = energy(67, 120), d4 = energy(62, 120);
+    CHECK(c4 > 20 * d4 && e4 > 20 * d4 && g4 > 20 * d4);
+    sim_control(1, 7, 0); ms(2500);
+    listen(120);
+    CHECK(energy(60, 120) < 1e-3 * c4 && energy(67, 120) < 1e-3 * g4);
+    boot("MAJ", 0);
+    conf(MAQAM_CHORD_TRIAD, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE);
+    CHECK(groove_track_role_set(0, GROOVE_TRACK_OFF) == 0);
+    sim_control(1, 7, 1); ms(300);
+    listen(120);
+    CHECK(energy(60, 120) < 1e-6 && energy(64, 120) < 1e-6);
+    sim_control(1, 7, 0); ms(40);
+    printf("routing: chord on a remapped input channel sounds and releases; an OFF track is silent\n");
+}
 static void overlap(void)
 {
     /* A3 key (key 4) = A C E (57 60 64), C4 key (key 7) = C E G (60 64 67): C and E are shared */
@@ -592,8 +614,24 @@ static void names(void)
     printf("names: NEU/MAJ by tuning, MIN-, inversions, sevenths, fixed shapes, drones, 12 stock chords\n");
 }
 
+/* V14 keeps a PLAY track's held keys across a project load: a held chord must still release every note. */
+static unsigned offs, ons;
+static int count_out(unsigned t, unsigned note, unsigned on) { (void)t; (void)note; if (on) ++ons; else ++offs; return 1; }
+static void held_across_load(void)
+{
+    boot("RAST", 0);
+    conf(0, 0, 0);
+    ons = offs = 0;
+    unsigned n = maqam_chord_start(3, 0, 60, 0);
+    CHECK(n >= 3 && maqam_chord_play(3, count_out) && ons == n);
+    maqam_project_loaded(NULL);                    /* a load while the key is held */
+    CHECK(maqam_chord_owned(3));
+    CHECK(maqam_chord_stop(3, count_out) && offs == n && !maqam_chord_owned(3));
+}
 int main(void)
 {
+    held_across_load();
+    routing();
     types();
     drones();
     exhaustive();

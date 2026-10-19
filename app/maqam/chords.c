@@ -21,7 +21,9 @@ MAQAM_SMALL void maqam_chords_reset(void)
 {
     memset(set, 0, sizeof set);
     memset(last, 0, sizeof last);
-    memset(own, 0, sizeof own);
+    /* Key ownership stays: V14 keeps a PLAY track's held keys across a project
+     * load, and their chords must still release whole. maqam_chord_sync drops
+     * the ownership of keys that are no longer held. */
 }
 MAQAM_SMALL void maqam_chord_forget(unsigned track)
 {
