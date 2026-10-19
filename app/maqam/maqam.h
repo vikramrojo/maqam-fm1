@@ -91,6 +91,14 @@ unsigned maqam_oct_buttons(unsigned track, unsigned active, unsigned oct_held, u
 void maqam_project_save(uint8_t t[MAQAM_TRAILER_BYTES]);
 /* Call after the engine tables are loaded. NULL or an invalid trailer: defaults, tables decide. */
 void maqam_project_loaded(const uint8_t *t);
+int maqam_trailer_default(const uint8_t *t);       /* the settings equal a fresh project's */
+/* Storage on V14 (storage.c): one sector below the patch library, an entry per slot bound to the
+   project contents (key). Writes are staged in the shared staging sector and committed first.
+   save: 0, GROOVE_PROJECT_TUNING_SPACE (an old sample bank covers the sector) or a Flash error.
+   load: 1 with t filled when the slot's entry matches key, 0 otherwise. recover: finish a staged write. */
+int maqam_storage_save(unsigned slot, uint32_t key, const uint8_t t[MAQAM_TRAILER_BYTES]);
+int maqam_storage_load(unsigned slot, uint32_t key, uint8_t t[MAQAM_TRAILER_BYTES]);
+int maqam_storage_recover(void);
 
 /* names.c: 24-tone names. maqam_name24 writes the name of `note` raised by `cents` (rounded to the nearest
    quarter tone) with its octave ("Ed4", "Cd5" for B4; the d is MAQAM_HF +50 c; 12-tone names exactly as the stock screen when

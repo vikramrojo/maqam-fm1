@@ -633,8 +633,8 @@ static void reduce_bank(void)
     ms(50);
     open_scale();
     CHECK(page() == PAGE_SCALE);
-    /* a WEST project has all-zero tables, so it saves fine next to the over-size bank */
-    maqam_set_project(find("MAJ"), 0);
+    /* default maqam settings (all-zero tables, nothing for the maqam sector) save fine next to the over-size bank */
+    maqam_set_project(0, 0);
     ms(400);
     for (unsigned t = 0; t < GROOVE_TRACKS; ++t) {
         struct groove_tuning z, zero;
@@ -666,8 +666,8 @@ static void reduce_bank(void)
     maqam_page_view(0, &v);
     has("warn text (view)", v.warn, "REDUCE SAMPLE BANK");
     shot("scale_reduce_bank");
-    /* back to a WEST scale: zero tables save, and the hint goes away once a save succeeds */
-    maqam_set_project(find("MAJ"), 0);
+    /* back to the defaults: the save succeeds, and the hint goes away */
+    maqam_set_project(0, 0);
     ms(300);
     btn(SAVE); btn(SAVE); ms(300);
     CHECK(page() == PAGE_SCALE);                 /* a good save returns to the page it came from */
@@ -681,7 +681,7 @@ static void reduce_bank(void)
     CHECK(groove_project_save_slot(0) == GROOVE_PROJECT_TUNING_SPACE);
     maqam_page_view(0, &v);
     has("direct refused save sets the warning", v.warn, "REDUCE SAMPLE BANK");
-    maqam_set_project(find("MAJ"), 0);
+    maqam_set_project(0, 0);
     CHECK(groove_project_save_slot(0) == 0);
     maqam_page_view(0, &v);
     CHECK(!v.warn[0]);

@@ -331,7 +331,9 @@ enum { GROOVE_SAMPLE_OFFSET = 69632, GROOVE_SAMPLE_BYTES = 466944,
  * writes to overlapping extension storage are rejected before erasing Flash. */
 enum { GROOVE_TUNING_OFFSET = GROOVE_FLASH_BYTES - 4096,
        GROOVE_LIBRARY_OFFSET = GROOVE_TUNING_OFFSET - 4 * 4096,
-       GROOVE_SAMPLE_LIMIT = GROOVE_LIBRARY_OFFSET - GROOVE_SAMPLE_OFFSET };
+       /* maqam: one more sector, below the library, for per-slot maqam settings (app/maqam/storage.c) */
+       GROOVE_MAQAM_OFFSET = GROOVE_LIBRARY_OFFSET - 4096,
+       GROOVE_SAMPLE_LIMIT = GROOVE_MAQAM_OFFSET - GROOVE_SAMPLE_OFFSET };
 /* Finish any committed shared journal before starting a new transaction. */
 int groove_storage_prepare(void);
 void groove_samples_init(void);

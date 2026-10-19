@@ -10,7 +10,13 @@ static struct {
 } st = {0, 0, 1, 0, 0, {0}, {0}};
 
 MAQAM_SMALL static void st_reset(void) { memset(&st, 0, sizeof st); st.trad = 1; }
-MAQAM_SMALL void maqam_init(void) { st_reset(); maqam_keys_reset(); maqam_chords_reset(); maqam_page_save_result(0); }
+static uint8_t defaults[MAQAM_TRAILER_BYTES];   /* the settings of a fresh project */
+MAQAM_SMALL void maqam_init(void)
+{
+    st_reset(); maqam_keys_reset(); maqam_chords_reset(); maqam_page_save_result(0);
+    if (!defaults[0]) maqam_project_save(defaults);
+}
+MAQAM_SMALL int maqam_trailer_default(const uint8_t *t) { return !memcmp(t, defaults, sizeof defaults); }
 MAQAM_SMALL unsigned maqam_default_layout(void) { return st.layout; }
 MAQAM_SMALL int maqam_set_default_layout(unsigned l)
 {

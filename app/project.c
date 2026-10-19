@@ -461,6 +461,7 @@ static int recover_staging(void)
         return FM1_FLASH_UNAVAILABLE;
     int r = groove_fm_library_recover();
     if (!r) r = tuning_recover();
+    if (!r) r = maqam_storage_recover(); /* maqam: */
     if (r) return r;
     r = read_sector(STAGING_SECTOR);
     if (r)
@@ -573,13 +574,19 @@ static int save_slot(unsigned slot)
     }
     record.header.magic = PROJECT_MAGIC;
     r = groove_arrangement_capture(&record.project);
-    if (!r)
-        maqam_project_save(record_tail); /* maqam: */
+    uint8_t tail[TAIL_BYTES]; /* maqam: */
+    maqam_project_save(tail);
     if (!r)
         r = write_record(slot, generation, saved);
     if (!r) {
         ++project_revision;
         r = tuning_save(slot);
+        if (!r) { /* maqam: settings bound to the saved project (the tuning key re-reads it) */
+            uint32_t key[3];
+            r = tuning_key(slot, key);
+            if (!r)
+                r = maqam_storage_save(slot, key[2], tail);
+        }
         if (r) {
             groove_project_touch();
             return r;
@@ -609,8 +616,9 @@ int groove_project_load_slot(unsigned slot)
     if (!r)
         r = read_project(sector);
     uint32_t key[3] = {record.header.generation, record.header.crc, 0};
-    uint8_t tail[TAIL_BYTES]; /* maqam: */
-    memcpy(tail, record_tail, sizeof tail);
+    uint8_t tail[TAIL_BYTES]; /* maqam: the slot's entry, else a V13-fork trailer, else defaults */
+    if (r || !maqam_storage_load(slot, project_tuning_key(), tail))
+        memcpy(tail, record_tail, sizeof tail);
     struct groove_tuning tables[GROOVE_TRACKS];
     if (!r && groove_tuning_apply) {
         key[2] = project_tuning_key();

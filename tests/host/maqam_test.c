@@ -22,7 +22,7 @@ static int failures;
 
 typedef struct groove_tuning tun8[GROOVE_TRACKS];
 enum { C = 0, CS, D, DS, E, F, FS, G, GS, A, AS, B };
-enum { SECTOR = 4096, TAIL = 4088, STAGING = GROOVE_PROJECT_SLOTS };
+enum { SECTOR = 4096, STAGING = GROOVE_PROJECT_SLOTS };
 
 static unsigned find(const char *code)
 {
@@ -253,15 +253,31 @@ static void undo(void)
     CHECK(maqam_track_scale(0) == rs && maqam_track_root(0) == 0);   /* relabelled by matching */
 }
 
-/* ---- persistence ---- */
-static uint32_t record_crc(const uint8_t *s) /* the V13 formula: header up to crc, settings, project */
+/* ---- persistence (V14: maqam settings in their own sector, app/maqam/storage.c) ---- */
+static uint8_t *sector(unsigned n) { return sim_flash() + n * SECTOR; }
+/* A slot's entry in the maqam sector: key (4), settings (8), crc (4) after an 8-byte header. */
+static uint8_t *entry(unsigned slot) { return sim_flash() + GROOVE_MAQAM_OFFSET + 8 + slot * 16; }
+static uint8_t *ms(unsigned slot) { return entry(slot) + 4; }
+static void entry_fix(unsigned slot)
+{
+    uint32_t crc = ~groove_crc32(~0U, entry(slot), 12);
+    memcpy(entry(slot) + 12, &crc, 4);
+}
+static void wipe_tail(unsigned slot) { memset(entry(slot), 0xff, 16); }
+/* V14 record checksum: header up to crc, the 12 settings bytes, the project. */
+static uint32_t v6_crc(const uint8_t *s)
+{
+    uint32_t crc = groove_crc32(~0U, s, 12);
+    crc = groove_crc32(crc, s + 4084, 12);
+    return ~groove_crc32(crc, s + 20, 4064);
+}
+/* The V5 formula (V13 and the V13 fork): header up to crc, 4 settings bytes, the project. */
+static uint32_t v5_crc(const uint8_t *s)
 {
     uint32_t crc = groove_crc32(~0U, s, 12);
     crc = groove_crc32(crc, s + 4084, 4);
     return ~groove_crc32(crc, s + 20, 4064);
 }
-static uint8_t *sector(unsigned n) { return sim_flash() + n * SECTOR; }
-static void wipe_tail(unsigned slot) { memset(sector(slot) + TAIL, 0xff, 8); memset(sector(STAGING) + TAIL, 0xff, 8); }
 static void trailer(void)
 {
     unsigned t7 = find("T.RST"), by = find("BAYAT");
@@ -271,17 +287,15 @@ static void trailer(void)
     tun8 want;
     CHECK(groove_tuning_capture(want) == 0);
     CHECK(groove_project_save_slot(3) == 0);
-    const uint8_t *s = sector(3);
+    const uint8_t *s = ms(3);
     uint8_t x = 0;
-    for (unsigned i = 0; i < 7; ++i) x ^= s[TAIL + i];
-    CHECK(s[TAIL] == 0xA1 && s[TAIL + 1] == t7 && s[TAIL + 2] == 4 && s[TAIL + 3] == 1 && s[TAIL + 4] == 4 &&
-          !s[TAIL + 5] && !s[TAIL + 6] && s[TAIL + 7] == (uint8_t)~x);
-    /* stock V13 compatibility: the 4088 B record and its CRC are what V13 writes */
+    for (unsigned i = 0; i < 7; ++i) x ^= s[i];
+    CHECK(s[0] == 0xA1 && s[1] == t7 && s[2] == 4 && s[3] == 1 && s[4] == 4 && !s[5] && !s[6] && s[7] == (uint8_t)~x);
+    /* the project record is V14's own, its checksum unchanged by maqam */
     uint32_t crc;
-    memcpy(&crc, s + 12, 4);
-    CHECK(crc == record_crc(s));
-    struct groove_project *p = groove_project_scratch();
-    CHECK(groove_project_capture(p) == 0 && !memcmp(s + 20, p, 4064));
+    memcpy(&crc, sector(3) + 12, 4);
+    CHECK(crc == v6_crc(sector(3)));
+    CHECK(sector(STAGING)[0] == 0xff);                               /* the staged write finished */
     /* an unchanged save writes nothing */
     uint32_t rev = sim_flash_revision();
     CHECK(groove_project_save_slot(3) == 0 && sim_flash_revision() == rev);
@@ -295,30 +309,27 @@ static void trailer(void)
     for (unsigned t = 0; t < 7; ++t) if (t != 2) CHECK(!maqam_overridden(t) && maqam_track_scale(t) == t7);
     /* EQUAL is saved in flag bit 0; the label of a recovered track may be an earlier scale with the same table */
     CHECK(maqam_set_intonation(0) == 0 && groove_tuning_capture(want) == 0 && groove_project_save_slot(3) == 0);
-    CHECK((sector(3)[TAIL + 3] & 1) == 0);
+    CHECK((ms(3)[3] & 1) == 0);
     maqam_init(); CHECK(groove_tuning_apply(z) == 0);
     CHECK(groove_project_load_slot(3) == 0 && is_tables(want) && maqam_trad() == 0 && maqam_overridden(2));
     CHECK(track_is(2, maqam_track_scale(2), maqam_track_root(2), 0, 0));
-    /* the staging copy carries the trailer: a trailer-only change rewrites the record, tables unchanged */
+    /* a settings-only change rewrites the entry; the record and tables are unchanged */
     maqam_init();
-    CHECK(groove_project_save_slot(3) == 0);
-    CHECK(!memcmp(sector(3) + TAIL, sector(STAGING) + TAIL, 8) && sector(3)[TAIL + 4] == 0);
-    CHECK(!memcmp(sector(3), sector(STAGING), TAIL) && record_crc(sector(STAGING)) == record_crc(sector(3)));
+    CHECK(groove_project_save_slot(3) == 0 && ms(3)[4] == 0 && sector(STAGING)[0] == 0xff);
     CHECK(groove_project_load_slot(3) == 0 && is_tables(want));
-    /* the settings-only rewrite of slot 15 keeps the trailer of the project stored there */
+    /* the device-settings rewrite of slot 15 leaves its maqam entry alone */
     CHECK(groove_project_save_slot(GROOVE_PROJECT_SLOTS - 1) == 0);
     uint8_t before[8];
-    memcpy(before, sector(GROOVE_PROJECT_SLOTS - 1) + TAIL, 8);
+    memcpy(before, ms(GROOVE_PROJECT_SLOTS - 1), 8);
     CHECK(before[0] == 0xA1);
     groove_settings_clock(GROOVE_CLOCK_MIDI);
     settle(); settle();
     CHECK(groove_settings_status() == 0);
-    CHECK(!memcmp(sector(GROOVE_PROJECT_SLOTS - 1) + TAIL, before, 8));
-    CHECK(record_crc(sector(GROOVE_PROJECT_SLOTS - 1)) == *(const uint32_t *)(const void *)(sector(GROOVE_PROJECT_SLOTS - 1) + 12));
+    CHECK(!memcmp(ms(GROOVE_PROJECT_SLOTS - 1), before, 8));
     groove_settings_clock(GROOVE_CLOCK_INTERNAL);
     settle(); settle();
 
-    /* a stock project (no trailer, no tables): WEST / C / TRAD, zero tables */
+    /* a stock project (no entry, no tables): WEST / C / TRAD, zero tables */
     fresh();
     CHECK(groove_project_save_slot(4) == 0);
     wipe_tail(4);
@@ -327,7 +338,7 @@ static void trailer(void)
     CHECK(maqam_project_scale() == 0 && maqam_project_root() == 0 && maqam_trad() == 1);
     for (unsigned t = 0; t < 7; ++t) CHECK(!maqam_overridden(t) && maqam_track_scale(t) == 0);
 
-    /* a stock V13 project with tables: tables kept, scale derived (BAYAT on D, TRAD), no trailer */
+    /* a stock project with tables: tables kept, scale derived (BAYAT on D, TRAD), no entry */
     fresh();
     struct groove_tuning g;
     memset(&g, 0, sizeof g);
@@ -341,31 +352,126 @@ static void trailer(void)
     CHECK(groove_project_load_slot(5) == 0 && is_tables(stock));
     CHECK(maqam_overridden(1) && maqam_track_scale(1) == by && maqam_track_root(1) == 4);
     CHECK(!maqam_overridden(0));
-    /* a damaged check byte or tag is treated as absent */
+    /* a damaged entry (settings check byte, or the entry crc) is treated as absent */
     CHECK(groove_project_save_slot(5) == 0);
-    sector(5)[TAIL + 7] ^= 1; sector(STAGING)[TAIL + 7] ^= 1;
+    ms(5)[7] ^= 1; entry_fix(5);
     maqam_init(); CHECK(groove_tuning_apply(z) == 0);
     CHECK(groove_project_load_slot(5) == 0 && is_tables(stock) && maqam_project_scale() == 0 && maqam_track_scale(1) == by);
-    /* a save over a stock record adds the trailer, and the unchanged project keeps its record body */
-    CHECK(groove_project_save_slot(5) == 0 && sector(5)[TAIL] == 0xA1 && record_crc(sector(5)) == *(const uint32_t *)(const void *)(sector(5) + 12));
+    CHECK(groove_project_save_slot(5) == 0 && ms(5)[0] == 0xA1);
+    entry(5)[13] ^= 1;
+    maqam_init(); CHECK(groove_tuning_apply(z) == 0);
+    CHECK(groove_project_load_slot(5) == 0 && maqam_project_scale() == 0);
+    CHECK(groove_project_save_slot(5) == 0 && ms(5)[0] == 0xA1);   /* a save restores the entry */
 }
 
-/* ---- chord settings in trailer bytes [5] (chord-mode mask) and [6] (type | inv << 3 | voice << 6) ---- */
+/* Settings belong to the exact project: a slot replaced elsewhere (here: its tempo edited and
+   the record checksum fixed, as another firmware's save would) loads the defaults. */
+static void replaced(void)
+{
+    unsigned rs = find("RAST");
+    fresh();
+    CHECK(maqam_set_project(rs, 0) == 0);
+    CHECK(groove_project_save_slot(8) == 0 && ms(8)[0] == 0xA1);
+    sector(8)[20 + 3832] ^= 1;                                       /* the project's tempo (120 -> 121) */
+    uint32_t crc = v6_crc(sector(8));
+    memcpy(sector(8) + 12, &crc, 4);
+    tun8 z; memset(z, 0, sizeof z);
+    maqam_init(); CHECK(groove_tuning_apply(z) == 0);
+    CHECK(groove_project_load_slot(8) == 0 && maqam_project_scale() == 0);
+    printf("replaced: a slot changed elsewhere loads default maqam settings\n");
+}
+
+/* A project saved by the V13 fork: a V5 record with the 8 settings bytes right after it. It loads with
+   them; the next save stores an entry and V14 rewrites the record as V6. */
+static void migrate(void)
+{
+    unsigned t7 = find("T.RST");
+    fresh();
+    CHECK(maqam_set_project(t7, 4) == 0);
+    CHECK(groove_project_save_slot(9) == 0);
+    uint8_t old[8];
+    memcpy(old, ms(9), 8);
+    wipe_tail(9);
+    uint8_t *s = sector(9);
+    uint32_t magic = 0x35504d46U;                                    /* V5_PROJECT_MAGIC */
+    memcpy(s, &magic, 4);
+    memset(s + 4084, 0, 4);                                          /* V5 settings: 4 bytes */
+    memcpy(s + 4088, old, 8);                                        /* the V13 fork's trailer */
+    uint32_t crc = v5_crc(s);
+    memcpy(s + 12, &crc, 4);
+    tun8 z; memset(z, 0, sizeof z);
+    maqam_init(); CHECK(groove_tuning_apply(z) == 0);
+    CHECK(groove_project_load_slot(9) == 0 && maqam_project_scale() == t7 && maqam_project_root() == 4);
+    CHECK(groove_project_save_slot(9) == 0 && !memcmp(ms(9), old, 8));
+    memcpy(&magic, sector(9), 4);
+    CHECK(magic == 0x36504d46U);                                     /* PROJECT_MAGIC (V6) */
+    maqam_init(); CHECK(groove_tuning_apply(z) == 0);
+    CHECK(groove_project_load_slot(9) == 0 && maqam_project_scale() == t7);
+    printf("migrate: a V13-fork V5 record keeps its settings and is saved as V6 with an entry\n");
+}
+
+/* An older sample bank reaching into the maqam sector: non-default settings are not saved (the stock
+   REDUCE SAMPLE BANK result), default settings save without a warning; the project itself is saved. */
+static void covered(void)
+{
+    unsigned rs = find("RAST");
+    fresh();
+    CHECK(GROOVE_SAMPLE_LIMIT == 442368 && GROOVE_MAQAM_OFFSET + 4096 == GROOVE_LIBRARY_OFFSET);
+    uint32_t h[3] = {0x53314d46U, 1, 445000};
+    memcpy(sim_flash() + GROOVE_SAMPLE_OFFSET, h, sizeof h);
+    CHECK(groove_project_save_slot(10) == 0);                       /* defaults: nothing to keep */
+    CHECK(maqam_set_project(rs, 0) == 0);
+    CHECK(groove_project_save_slot(10) == GROOVE_PROJECT_TUNING_SPACE && ms(10)[0] == 0xff);
+    memset(sim_flash() + GROOVE_SAMPLE_OFFSET, 0xff, sizeof h);
+    CHECK(groove_project_save_slot(10) == 0 && ms(10)[0] == 0xA1);
+    printf("covered: an old sample bank over the sector blocks non-default settings only\n");
+}
+
+/* Power loss around the staged write: a committed stage is completed on the next storage access,
+   an uncommitted one is dropped and the old sector stands. Other slots keep their entries. */
+static void staged(void)
+{
+    unsigned rs = find("RAST"), t7 = find("T.RST");
+    fresh();
+    CHECK(maqam_set_project(rs, 0) == 0 && groove_project_save_slot(11) == 0);
+    CHECK(maqam_set_project(t7, 0) == 0 && groove_project_save_slot(12) == 0);
+    uint8_t keep11[16], body[4096];
+    memcpy(keep11, entry(11), 16);
+    /* build the stage of a write that changed slot 12, as storage.c does */
+    enum { HDR = 12 };
+    memcpy(body, sim_flash() + GROOVE_MAQAM_OFFSET, 8 + 16 * GROOVE_PROJECT_SLOTS);
+    body[8 + 12 * 16 + 4 + 2] = 7;                                   /* slot 12: root 7 */
+    uint8_t *e12 = body + 8 + 12 * 16, x = 0;
+    for (unsigned i = 0; i < 7; ++i) x ^= e12[4 + i];
+    e12[4 + 7] = (uint8_t)~x;
+    uint32_t ecrc = ~groove_crc32(~0U, e12, 12);
+    memcpy(e12 + 12, &ecrc, 4);
+    uint32_t bcrc = ~groove_crc32(~0U, body, 8 + 16 * GROOVE_PROJECT_SLOTS);
+    for (unsigned committed = 0; committed < 2; ++committed) {
+        uint8_t *st = sector(STAGING);
+        uint32_t hdr[3] = {0x31514d46U, bcrc, committed ? 0U : ~0U};
+        memset(st, 0xff, SECTOR);
+        memcpy(st, hdr, HDR);
+        memcpy(st + HDR, body, 8 + 16 * GROOVE_PROJECT_SLOTS);
+        CHECK(groove_storage_prepare() == 0 && st[0] == 0xff);       /* the stage is consumed */
+        CHECK(ms(12)[2] == (committed ? 7 : 0));
+        CHECK(!memcmp(entry(11), keep11, 16));
+    }
+    printf("staged: a committed stage completes, an uncommitted one is dropped, other slots unaffected\n");
+}
 static void chords(unsigned track, unsigned type, unsigned inv, unsigned voice)
 {
     CHECK(maqam_chord_set(track, MAQAM_CH_MODE, 1) == 0 && maqam_chord_set(track, MAQAM_CH_TYPE, type) == 0);
     CHECK(maqam_chord_set(track, MAQAM_CH_INV, inv) == 0 && maqam_chord_set(track, MAQAM_CH_VOICE, voice) == 0);
 }
-static void patch(unsigned slot, unsigned b5, unsigned b6)   /* new [5], [6] and check byte, in the slot and its staging copy */
+static void patch(unsigned slot, unsigned b5, unsigned b6)   /* new [5], [6] and check byte in the slot's entry */
 {
-    uint8_t *tl[2] = {sector(slot) + TAIL, sector(STAGING) + TAIL};
-    for (unsigned k = 0; k < 2; ++k) {
-        uint8_t x = 0;
-        tl[k][5] = (uint8_t)b5;
-        tl[k][6] = (uint8_t)b6;
-        for (unsigned i = 0; i < 7; ++i) x ^= tl[k][i];
-        tl[k][7] = (uint8_t)~x;
-    }
+    uint8_t *t = ms(slot), x = 0;
+    t[5] = (uint8_t)b5;
+    t[6] = (uint8_t)b6;
+    for (unsigned i = 0; i < 7; ++i) x ^= t[i];
+    t[7] = (uint8_t)~x;
+    entry_fix(slot);
 }
 static void reload(unsigned slot)
 {
@@ -387,7 +493,7 @@ static void chord_trailer(void)
     CHECK(maqam_set_project(rs, 0) == 0);
     chords(2, MAQAM_CHORD_7TH, MAQAM_INV_AUTO, MAQAM_VOICE_OPEN);
     CHECK(groove_project_save_slot(6) == 0);
-    CHECK(sector(6)[TAIL + 5] == 4 && sector(6)[TAIL + 6] == (1 | 4 << 3 | 1 << 6));
+    CHECK(ms(6)[5] == 4 && ms(6)[6] == (1 | 4 << 3 | 1 << 6));
     reload(6);
     CHECK(maqam_project_scale() == rs && chord_is(2, 1, MAQAM_CHORD_7TH, MAQAM_INV_AUTO, MAQAM_VOICE_OPEN));
     CHECK(chord_is(0, 0, MAQAM_CHORD_7TH, MAQAM_INV_AUTO, MAQAM_VOICE_OPEN));     /* every track gets the one set; only the mask differs */
@@ -396,7 +502,7 @@ static void chord_trailer(void)
     CHECK(maqam_set_project(rs, 0) == 0);
     chords(0, MAQAM_CHORD_DRN5, MAQAM_INV_AUTO, MAQAM_VOICE_BASS);
     CHECK(groove_project_save_slot(6) == 0);
-    CHECK(sector(6)[TAIL + 6] == (7 | 4 << 3 | 2 << 6));
+    CHECK(ms(6)[6] == (7 | 4 << 3 | 2 << 6));
     reload(6);
     CHECK(chord_is(0, 1, MAQAM_CHORD_DRN5, MAQAM_INV_AUTO, MAQAM_VOICE_BASS));
     /* lossy: tracks 2 and 4 (indexes 1 and 3) differ, both load with the lowest-numbered track's set */
@@ -405,13 +511,13 @@ static void chord_trailer(void)
     chords(3, MAQAM_CHORD_DRN, MAQAM_INV_1ST, MAQAM_VOICE_BASS);
     chords(1, MAQAM_CHORD_7TH, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE);
     CHECK(groove_project_save_slot(6) == 0);
-    CHECK(sector(6)[TAIL + 5] == (2 | 8) && sector(6)[TAIL + 6] == MAQAM_CHORD_7TH);
+    CHECK(ms(6)[5] == (2 | 8) && ms(6)[6] == MAQAM_CHORD_7TH);
     reload(6);
     CHECK(chord_is(1, 1, MAQAM_CHORD_7TH, 0, 0) && chord_is(3, 1, MAQAM_CHORD_7TH, 0, 0) && chord_is(2, 0, MAQAM_CHORD_7TH, 0, 0));
     /* no track in chord mode: the defaults are saved whatever the other fields hold */
     fresh();
     CHECK(maqam_chord_set(2, MAQAM_CH_TYPE, MAQAM_CHORD_DRN) == 0 && groove_project_save_slot(7) == 0);
-    CHECK(!sector(7)[TAIL + 5] && !sector(7)[TAIL + 6]);
+    CHECK(!ms(7)[5] && !ms(7)[6]);
     /* an old trailer ([5] = [6] = 0): chord mode off, TRIAD / ROOT / CLOSE; a chord-less project leaves the scale alone */
     fresh();
     CHECK(maqam_set_project(rs, 0) == 0);
@@ -481,6 +587,10 @@ int main(void)
     state_push();
     undo();
     trailer();
+    replaced();
+    migrate();
+    covered();
+    staged();
     chord_trailer();
     matching();
     if (failures) { printf("maqam_test: %d failure(s)\n", failures); return 1; }
