@@ -1367,9 +1367,9 @@ static __attribute__((noinline)) void edit_page_draw(unsigned visible)
     } else {
         text(8, 40, "DX7 QUICK EDIT", 2, ACCENT, BACK);
         char name[11]; memcpy(name, frame_patch + 145, 10); name[10] = 0;
-        number(8, 76, frame_views[track].program + 1, 2, 1, ACCENT, BACK);
-        text(20, 76, "/16", 1, DIM, BACK);
-        text(42, 76, frame_views[track].modified ? "*" : " ", 1, AMBER, BACK);
+        number(8, 76, frame_views[track].program + 1, 3, 1, ACCENT, BACK); /* maqam: V14 reaches 128 programs */
+        text(26, 76, "/128", 1, DIM, BACK);
+        text(50, 76, frame_views[track].modified ? "*" : " ", 1, AMBER, BACK);
         text(56, 72, name, 2, TEXT, BACK);
         text(8, 102, "PRESETS SELECT VOICE", 1, TEXT, BACK);
         text(8, 126, "HOLD EDIT OPERATOR PARAMETERS", 1, DIM, BACK);
