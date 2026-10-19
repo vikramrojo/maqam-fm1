@@ -26,26 +26,18 @@ MAQAM_SMALL static int covered(void)
     int r = fm1_flash_read(GROOVE_SAMPLE_OFFSET, h, sizeof h);
     return r ? r : h[0] == 0x53314d46U && h[2] > GROOVE_MAQAM_OFFSET - GROOVE_SAMPLE_OFFSET;
 }
-MAQAM_SMALL static int place(const struct sector *s)
-{
-    struct sector check;
-    int r = fm1_flash_erase(GROOVE_MAQAM_OFFSET);
-    if (!r) r = fm1_flash_write(GROOVE_MAQAM_OFFSET, s, sizeof *s);
-    if (!r) r = fm1_flash_read(GROOVE_MAQAM_OFFSET, &check, sizeof check);
-    if (!r && memcmp(&check, s, sizeof check)) r = FM1_FLASH_IO;
-    return r;
-}
+/* A committed stage is copied into place (again, after a power loss); an uncommitted one is dropped and
+   the old sector stands. The stage is erased only once the copy is written. */
 MAQAM_SMALL int maqam_storage_recover(void)
 {
     struct stage st;
     int r = fm1_flash_read(STAGE, &st, sizeof st);
     if (r || st.magic != STAGE_MAGIC) return r;
     if (!st.commit && st.crc == body_crc(&st.body)) {
-        struct sector now;
-        r = fm1_flash_read(GROOVE_MAQAM_OFFSET, &now, sizeof now);
-        if (!r && memcmp(&now, &st.body, sizeof now)) r = place(&st.body);
+        r = fm1_flash_erase(GROOVE_MAQAM_OFFSET);
+        if (!r) r = fm1_flash_write(GROOVE_MAQAM_OFFSET, &st.body, sizeof st.body);
     }
-    return r ? r : fm1_flash_erase(STAGE);   /* an uncommitted stage is dropped: the old sector stands */
+    return r ? r : fm1_flash_erase(STAGE);
 }
 MAQAM_SMALL int maqam_storage_load(unsigned slot, uint32_t key, uint8_t t[MAQAM_TRAILER_BYTES])
 {
