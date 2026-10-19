@@ -99,7 +99,9 @@ static int command(unsigned cmd, const uint8_t *data, unsigned n, uint8_t *out, 
     /* Additive capability reply; command 21 retains its old exact layout. */
     if (cmd == 22 && !n) {
         out[0]=1; out[1]=128; out[2]=4; out[3]=(uint8_t)groove_fm_library_available();
-        put32(out+4,GROOVE_SAMPLE_LIMIT); out[8]=3; /* session roles and extended/synchronized delay */
+        /* maqam: V14's workbench requires exactly V14's limit here; the fork's lower limit (the maqam sector)
+         * is enforced when an upload begins, before anything is erased. */
+        put32(out+4,GROOVE_LIBRARY_OFFSET-GROOVE_SAMPLE_OFFSET); out[8]=3; /* session roles and extended/synchronized delay */
         *count=9; return 0;
     }
     if (cmd == 21 && !n) {

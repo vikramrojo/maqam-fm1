@@ -183,7 +183,10 @@ static void sample_cap(void)
     CHECK(get32(out + 5) == GROOVE_SAMPLE_BYTES);
     /* command 21 keeps V14's value; command 22 reports the real upload limit */
     CHECK(command(21, NULL, 0, out, &count) == 0 && count == 7 && get32(out + 3) == GROOVE_SAMPLE_BYTES - 4096);
-    CHECK(command(22, NULL, 0, out, &count) == 0 && count == 9 && get32(out + 4) == 442368);
+    /* command 22 must pass V14's workbench check exactly (sdk/WebUpdate.js); the fork's lower cap is enforced
+     * by groove_samples_begin above */
+    CHECK(command(22, NULL, 0, out, &count) == 0 && count == 9 && out[0] == 1 && out[1] == 128 && out[2] == 4 &&
+          out[3] <= 1 && get32(out + 4) == 446464 && !(out[8] & ~3U));
 
     /* A bank at the largest size that fits validates and reads back. */
     fresh();
