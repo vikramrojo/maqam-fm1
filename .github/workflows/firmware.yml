@@ -70,7 +70,7 @@ jobs:
           Write-Host '== largest 60 symbols'
           $rows | Sort-Object size -Descending | Select-Object -First 60 | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
           Write-Host '== maqam / screen / project symbols, by size'
-          $app = $rows | Where-Object { $_.name -match 'maqam|scale|screen|project|names|pages|keys|SCALES|draw|text' }
+          $app = $rows | Where-Object { $_.name -match 'maqam|scale|screen|project|names|pages|keys|SCALES|draw|text|factory|storage|preset|release_keys|chord|init_voice|groove_fm_' }
           $app | Sort-Object size -Descending | Select-Object -First 80 | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
           Write-Host ('maqam_* total: ' + (($rows | Where-Object { $_.name -match '^maqam_|SCALES|SCALE_CODES|SET_NAMES' } | Measure-Object size -Sum).Sum))
 
