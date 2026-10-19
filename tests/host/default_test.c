@@ -12,6 +12,12 @@
 #undef groove_factory_name
 #undef groove_factory_build
 #undef GROOVE_FACTORY_PROJECTS
+/* The device image's fm_factory.c: no V15 bank, INIT VOICE for unsaved library banks. */
+#define groove_fm_factory_raw device_fm_factory_raw
+#define groove_fm_factory device_fm_factory
+#include "../../app/fm_factory.c"
+#undef groove_fm_factory_raw
+#undef groove_fm_factory
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -42,7 +48,16 @@ int main(void)
         if (a[i] != b[i]) { printf("byte %u: DEFAULT %u, start-up %u\n", i, a[i], b[i]); ++shown; }
     CHECK(!memcmp(p, boot, sizeof *p));
     free(p); free(boot);
+    /* unsaved library banks on the device play INIT VOICE: one full-level sine carrier, no detune */
+    uint8_t v[156];
+    device_fm_factory(v, 77);
+    CHECK(!memcmp(v + 145, "INIT VOICE", 10) && v[155] == 63 && v[134] == 0 && v[5 * 21 + 16] == 99 && v[16] == 0);
+    for (unsigned op = 0; op < 6; ++op) CHECK(v[op * 21 + 18] == 1 && v[op * 21 + 20] == 7);
+    CHECK(device_fm_factory_raw(0) == device_fm_factory_raw(127));
+    /* the web build keeps the V15 bank: program 0 is PIANO 1 */
+    groove_fm_factory(v, 0);
+    CHECK(!memcmp(v + 145, "PIANO 1", 7));
     if (failures) { printf("default_test: %d failure(s)\n", failures); return 1; }
-    printf("default_test: DEFAULT equals the start-up project; the web build keeps 16 demos\n");
+    printf("default_test: DEFAULT equals the start-up project; INIT VOICE for unsaved banks; the web build keeps 16 demos and the V15 bank\n");
     return 0;
 }
