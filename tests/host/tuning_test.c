@@ -86,12 +86,27 @@ static void tone_set(unsigned track, unsigned parameter, unsigned value)
     uint8_t v[GROOVE_TONE_PARAMS];
     if (groove_tone_copy(track, 0, v) >= 0) groove_tone_edit(track, 0, parameter, (int)value - (int)v[parameter]);
 }
+/* The DX7 INIT VOICE: one sine carrier at ratio 1, no detune. Pitch tests use it
+ * rather than the default program, which on V14 is a detuned factory voice. */
+static void init_voice(uint8_t p[156])
+{
+    memset(p, 0, 156);
+    for (unsigned op = 0; op < 6; ++op) {
+        uint8_t *o = p + 21 * op;
+        memset(o, 99, 7); o[8] = 39; o[18] = 1; o[20] = 7;
+    }
+    p[5 * 21 + 16] = 99;
+    memset(p + 126, 99, 4); memset(p + 130, 50, 4);
+    p[136] = 1; p[137] = 35; p[141] = 1; p[143] = 3; p[144] = 24;
+    memcpy(p + 145, "INIT VOICE", 10); p[155] = 63;
+}
 static void setup(unsigned source, const struct groove_tuning *t, int bend14)
 {
     sim_boot(3);
     filled = 0;
     if (groove_source_type(0) != source) CHECK(groove_source_set(0, source) == 0);
     if (source == GROOVE_303) { tone_set(0, 0, 127); tone_set(0, 1, 0); tone_set(0, 2, 0); }
+    if (source == GROOVE_DX7) { uint8_t p[156]; init_voice(p); CHECK(groove_fm_import(0, p) == 0); }
     if (t) CHECK(groove_tuning_set(0, t) == 0);
     if (bend14) {
         uint8_t m[3] = {0xe0, (uint8_t)(bend14 & 127), (uint8_t)(bend14 >> 7)};
@@ -307,7 +322,8 @@ static void glide_dx7(void)
     uint8_t patch[SYNTH_DX7_EXPANDED_PATCH_BYTES];
     struct groove_fm_controls controls;
     sim_boot(3);
-    CHECK(groove_source_type(0) == GROOVE_DX7 && groove_fm_copy(0, patch, &controls) == 0); /* the engine's own patch */
+    CHECK(groove_source_type(0) == GROOVE_DX7 && groove_fm_copy(0, patch, &controls) == 0); /* the engine's own patch layout */
+    init_voice(patch);
     synth_dx7_t *s = synth_dx7_create(GROOVE_VOICES, FM1_SAMPLE_RATE, FM1_BLOCK_FRAMES);
     CHECK(s != NULL);
     if (!s) return;
