@@ -10,7 +10,7 @@ cc=${CC:-$(command -v clang || command -v cc)}
 # MIDI router calls when present). ELF linkers leave them null; Mach-O needs
 # them named.
 weak=""
-[ "$(uname -s)" = Darwin ] && weak="-Wl,-U,_groove_midi_panel_reset"
+[ "$(uname -s)" = Darwin ] && weak="-Wl,-U,_groove_midi_panel_reset -Wl,-U,_groove_midi_panel_track_reset"
 mkdir -p "$out"
 cd "$root"
 srcs=$(find app web third_party/synth -name '*.c' -not -path 'app/board/*' | LC_ALL=C sort)

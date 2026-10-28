@@ -15,10 +15,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     env:
-      # JieLi installer 2.5.2 holds "JieLi PI32v2 clang 4.0.1 r3": all 22 files
+      # JieLi installer 2.5.3 holds PI32v2 clang 4.0.1 r3: all 22 files must
       # match sdk/manifest.json external_toolchain (Build.ps1 re-checks them).
-      JL_INSTALLER_URL: https://jl-update.oss-cn-shenzhen.aliyuncs.com/2.5.2.exe
-      JL_INSTALLER_SHA256: 1ec78e3315a5987d4e82ecd002536c84240e5c832b1875beff7ce55450124ee5
+      JL_INSTALLER_URL: https://jl-update.oss-cn-shenzhen.aliyuncs.com/2.5.3.exe
+      JL_INSTALLER_SHA256: 399bd518a28e47a7a0394506cebd5bf658748a58cd6b7c02512e24b4b88c5a5e
       FM1_PI32_TOOLCHAIN: C:\jl\pi32   # actions/cache refuses paths with '..'
       FM1_SOURCE_URL: https://github.com/${{ github.repository }}/archive/${{ github.sha }}.zip
     steps:
@@ -29,7 +29,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\jl
-          key: jieli-pi32-2.5.2-${{ env.JL_INSTALLER_SHA256 }}
+          key: jieli-pi32-2.5.3-${{ env.JL_INSTALLER_SHA256 }}
 
       - name: JieLi toolchain
         if: steps.tc.outputs.cache-hit != 'true'
