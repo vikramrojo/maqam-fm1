@@ -1,0 +1,77 @@
+# Legacy scale indices: the 73 scales of the six-set library (fork commit b7519b16), in their old index
+# order, each mapped to its code in the two-set library, or '-' when it has none. Projects saved with an
+# old index (settings tag 0xA1) are migrated through this table on load. Append-only; never reorder.
+#  index old    new
+  0 CHR    CHR   
+  1 MAJ    MAJ   
+  2 MIN    MIN   
+  3 DOR    DOR   
+  4 MIX    MIX   
+  5 PEN    PEN   
+  6 MPEN   MPEN  
+  7 HARM   HARM  
+  8 PHRY   PHRY  
+  9 LYD    LYD   
+ 10 LOC    LOC   
+ 11 MEL    MEL   
+ 12 BLUES  BLUES 
+ 13 WHOLE  WHOLE 
+ 14 DIMHW  DIMHW 
+ 15 DIMWH  DIMWH 
+ 16 T.RST  MAHUR   # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 17 USSAK  BAYAT   # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 18 HUSEY  HUSNI   # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 19 KURDI  KURD    # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 20 NIHAV  NAHAW   # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 21 HICAZ  PHDOM   # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 22 HCKAR  HJKAR   # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 23 SUZIN  SUZNK   # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 24 KARCI  BSHRI   # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 25 T.SBA  SABA    # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 26 SEGAH  SIKAH   # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 27 HUZZM  HUZAM   # Turkish makam: alias (scales/SOURCE.md, Sinfon scale-system.md section 8)
+ 28 RAST   RAST  
+ 29 BAYAT  BAYAT 
+ 30 SABA   SABA  
+ 31 SIKAH  SIKAH 
+ 32 HIJAZ  HIJAZ 
+ 33 NAHAW  NAHAW 
+ 34 KURD   KURD  
+ 35 AJAM   AJAM  
+ 36 NIKRZ  NIKRZ 
+ 37 HJKAR  HJKAR 
+ 38 SUZNK  SUZNK 
+ 39 HUZAM  HUZAM 
+ 40 YAMAN  LYD     # raga: alias (section 9)
+ 41 BILAW  MAJ     # raga: alias (section 9)
+ 42 KHMAJ  MIX     # raga: alias (section 9)
+ 43 KAFI   DOR     # raga: alias (section 9)
+ 44 ASAVR  MIN     # raga: alias (section 9)
+ 45 BHRVI  PHRY    # raga: alias (section 9)
+ 46 BHAIR  HJKAR   # raga: alias (section 9)
+ 47 TODI   -       # raga: no scale with its notes; dropped
+ 48 PURVI  -       # raga: no scale with its notes; dropped
+ 49 MARWA  -       # raga: no scale with its notes; dropped
+ 50 BHUPL  PEN     # raga: alias (section 9)
+ 51 MALKS  -       # raga: no scale with its notes; dropped
+ 52 P.HUS  -       # personal scale: Sinfon custom set, not in the firmware
+ 53 P.MSR  -       # personal scale: Sinfon custom set, not in the firmware
+ 54 P.NEV  -       # personal scale: Sinfon custom set, not in the firmware
+ 55 P.USK  -       # personal scale: Sinfon custom set, not in the firmware
+ 56 P.NHK  -       # personal scale: Sinfon custom set, not in the firmware
+ 57 P.HKR  -       # personal scale: Sinfon custom set, not in the firmware
+ 58 P.HJZ  -       # personal scale: Sinfon custom set, not in the firmware
+ 59 P.SUB  -       # personal scale: Sinfon custom set, not in the firmware
+ 60 P.SU6  -       # personal scale: Sinfon custom set, not in the firmware
+ 61 P.SEE  -       # personal scale: Sinfon custom set, not in the firmware
+ 62 P.BHL  -       # personal scale: Sinfon custom set, not in the firmware
+ 63 P.CHG  -       # personal scale: Sinfon custom set, not in the firmware
+ 64 P.HMY  -       # personal scale: Sinfon custom set, not in the firmware
+ 65 P.RST  -       # personal scale: Sinfon custom set, not in the firmware
+ 66 P.ACR  -       # personal scale: Sinfon custom set, not in the firmware
+ 67 P.MHR  -       # personal scale: Sinfon custom set, not in the firmware
+ 68 J.KGL  -       # personal scale: Sinfon custom set, not in the firmware
+ 69 J.NRZ  -       # personal scale: Sinfon custom set, not in the firmware
+ 70 J.SZK  -       # personal scale: Sinfon custom set, not in the firmware
+ 71 J.HJR  -       # personal scale: Sinfon custom set, not in the firmware
+ 72 J.DRB  -       # personal scale: Sinfon custom set, not in the firmware

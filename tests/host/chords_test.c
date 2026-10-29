@@ -187,16 +187,16 @@ static void exhaustive(void)
                 }
             }
         }
-    CHECK(combos > 1500);
+    CHECK(combos + skipped == NSCALES * 24U && combos > 800);   /* every scale at every root */
     drones_all();
     printf("exhaustive: %u scale/root pairs (%u skipped, %u without degrees), %u chords ascending, in range, on degree keys\n",
            combos, skipped, none, chords);
 }
 
-/* The drone scenarios of the chord-mode spec (tasks 5.1). Hüseyni on A: the tonic A, the fifth E, the B key (B-half-flat). */
+/* The drone scenarios of the chord-mode spec (tasks 5.1). ARAB Husayni (Hüseyni) on A: the tonic A, the fifth E, the B key (B-half-flat). */
 static void drones(void)
 {
-    boot("P.HUS", 18);
+    boot("HUSNI", 18);
     conf(MAQAM_CHORD_DRN, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE);
     SAYS(59, 0, "45 59");                          /* A2 under B-half-flat 3 */
     conf(MAQAM_CHORD_DRN5, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE);
@@ -579,7 +579,7 @@ static void names(void)
         CHECK(rt.main[4] == -43);               /* E entry -43 (TRAD) */
     }
     NAMED(0, "+350", 36, 64);                  /* Rast C3 under E-half-flat 4 */
-    boot("P.HUS", 18);
+    boot("HUSNI", 18);
     NAMED(0, "+150", 45, 52, 59);              /* DRN5 on A: A2 E3 B-half-flat 3 */
     NAMED(0, "+150", 59, 69, 76);              /* a high drone: B-half-flat 3, A4, E5 (DRN5 in 2ND) */
     boot("MAJ", 0);

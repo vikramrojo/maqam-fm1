@@ -126,7 +126,7 @@ double-tap octave (150 ms yes, slow no, key between no, clamp), drum tracks unch
 `chords_test` (run from the repository root) covers chord mode (`app/maqam/chords.c`): the chord notes for WEST MIN
 on A (all seven degrees), Rast TRIAD on C, the descending-only Bb key, DRN over A in Hüseyni, pentatonic TRIAD, snapping,
 all eight types, inversions (3RD clamps), AUTO (C then F = C4 F4 A4), OPEN and BASS, and an exhaustive pass over all
-73 scales x 24 roots x 7 types x every degree key (ascending, in range, on keys that carry a degree) and over every
+36 scales x 24 roots x 7 types x every degree key (ascending, in range, on keys that carry a degree) and over every
 inversion/voicing (at most 8 notes, in range). Through the real `screen.c` key loop it checks that a chord-mode key
 records its chord on the step, that overlapping chords keep shared notes until the last holder releases (Goertzel
 energy of the audio, and `maqam_chord_holders`), OCT alt on every chord note (`GROOVE_STEP_ALT`), the drum track
@@ -141,7 +141,7 @@ stock formula is copied into the test), track names from the real tables (Rast T
 the step NOTE knob shows `Ed4` / `E4.`, and the step tiles differ for plain and alt steps and repaint when a table
 changes. Scale-aware spelling (task 5.4): Bayati on D (`Bb4`, D Ed F G A Bb C), Saba `Gb`, Hijaz up and down,
 Rast `Bd`/`Bb`, Major on A#/Bb and C#, pentatonic and WEST chromatic fall back to stock names, alt E at -100 reads
-`Eb4`, and all 73 scales x 24 roots are either spelled with one letter and one accidental per degree or fall back
+`Eb4`, and all 36 scales x 24 roots are either spelled with one letter and one accidental per degree or fall back
 as a whole (the counts are printed).
 
 ## Pages test
@@ -170,7 +170,7 @@ mismatch there as a prompt to investigate, and re-record only on purpose with
 the committed hashes.
 
 The degree row and the spelled alt strip (task 5.5) are covered by `pages_test` too: the Bayati row cells, cents and
-marks, the Rast row's `Bb` down and `Bd` up, one cell per degree for all 73 scales, the Bayati alt strip, and the
+marks, the Rast row's `Bb` down and `Bd` up, one cell per degree for all 36 scales, the Bayati alt strip, and the
 PNGs `scale_row_bayati`, `scale_row_rast`, `scale_alt_bayati` and `steps_bb4` in `build/host/`.
 
 ## Scale page screenshots

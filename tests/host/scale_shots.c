@@ -53,9 +53,9 @@ int main(void)
         snap("10_bayati_fallback_root");
     }
     project("BAYAT", 9, 1);  snap("11_bayati_quarter_root_e_plus");
-    project("P.HUS", 18, 0); snap("12_psych_huseyni_on_a");
-    project("J.DRB", 0, 0);  snap("13_jins_darbari");
-    project("T.RST", 14, 1); snap("14_turkish_rast_on_g");
+    project("HUSNI", 18, 0); snap("12_husayni_on_a");
+    project("BSHRI", 4, 0);  snap("13_bayati_shuri_on_d");
+    project("MAHUR", 14, 1); snap("14_mahur_on_g");
 
     /* SCALE page of a track with its own scale, CUSTOM, and drums */
     project("RAST", 0, 1);
@@ -69,7 +69,7 @@ int main(void)
     enc(0, -7);
 
     /* TRACK page: following, own with its own layout, CUSTOM, drums */
-    project("P.HUS", 18, 1);
+    project("HUSNI", 18, 1);
     enc(1, 1); ms(300);
     snap("17_track_follow");
     enc(2, 1); enc(3, 1); ms(300);
@@ -91,7 +91,7 @@ int main(void)
     snap("21_track_drums");
 
     /* TRACK page: extremes on adjacent keys and an out-of-scale flat */
-    project("P.HUS", 18, 1);
+    project("HUSNI", 18, 1);
     enc(1, 1); ms(100);
     maqam_set_alt(0, 4, -100);                       /* E key: Eb */
     maqam_set_alt(0, 5, 127);
@@ -131,7 +131,7 @@ int main(void)
     enc(3, 1); for (unsigned i = 0; i < 4; ++i) enc(4, 1); ms(100);   /* 7TH, AUTO */
     key(7); key(12); ms(400);
     snap("28_chord_7th_auto");
-    project("P.HUS", 18, 1);
+    project("HUSNI", 18, 1);
     enc(1, 2); enc(2, 1); ms(100);
     for (unsigned i = 0; i < 6; ++i) enc(3, 1);      /* DRN */
     key(18); ms(400);   /* the B key (B-half-flat) */

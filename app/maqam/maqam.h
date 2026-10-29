@@ -4,8 +4,10 @@
 #include <stdint.h>
 #include "../instrument.h"
 
-/* Scales are library indices (scales.h, frozen). Roots are quarter tones above C, 0..23. Control task only. */
-enum { MAQAM_CUSTOM = 0xFF, MAQAM_TRAILER_BYTES = 8, MAQAM_TRAILER_TAG = 0xA1 };
+/* Scales are library indices (scales.h, in file order; scales/legacy.txt maps the six-set indices). Roots are quarter tones above C, 0..23. Control task only. */
+/* Settings tag: 0xA2 holds a two-set library index; 0xA1 (saved before the two-set library) a six-set index,
+   migrated through SCALE_LEGACY on load. */
+enum { MAQAM_CUSTOM = 0xFF, MAQAM_TRAILER_BYTES = 8, MAQAM_TRAILER_TAG = 0xA2, MAQAM_TRAILER_TAG_V1 = 0xA1 };
 
 /* Control-path code (every function in pages.c state.c keys.c names.c tuning.c engine.c; none runs in the audio
    task) is built for size: the firmware flags are fixed, so the attribute does it. clang: minsize implies optsize. */

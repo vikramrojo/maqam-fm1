@@ -9,13 +9,14 @@ usage: gen_scales.py OUT.h            write the header and OUT.c (the data, one 
        gen_scales.py --assign CODE [ROOT]   print the key assignment of a scale (all roots if no ROOT)
        ... --dir DIR                  read the scale files from DIR (default: scales/ next to tools/)
 
-Scale file format (one file per set: west.txt turk.txt arab.txt india.txt psych.txt jins.txt; '#' starts a comment):
+Scale file format (one file per set: west.txt arab.txt, vendored from Sinfon; '#' starts a comment):
 
     scale CODE "Name" home <note>
       from <value>      (optional) the maqam's own tonic; every value is divided by it and
                         octave-reduced into [0, 1200) cents. Lets ARAB rows stay "from rast".
       up   <values>     ascending form; the first value is the tonic
       down <values>     descending form (optional; defaults to up)
+      alias "Name"      (any number) another name for the same notes; Sinfon-only, ignored here
 
 A value is Scala syntax: cents if it contains '.', else a ratio 9/8 (an integer N alone = N/1).
 
@@ -64,20 +65,15 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
-SETS = ["WEST", "TURK", "ARAB", "INDIA", "PSYCH", "JINS"]
-FILES = {"WEST": "west.txt", "TURK": "turk.txt", "ARAB": "arab.txt", "INDIA": "india.txt", "PSYCH": "psych.txt", "JINS": "jins.txt"}
+SETS = ["WEST", "ARAB"]
+FILES = {"WEST": "west.txt", "ARAB": "arab.txt"}
 
-# Indices are append-only: this list is the contract. These codes keep their indices; scales not
-# in it are numbered after them. Add a new code here (at the end) once it ships.
-FROZEN = (
-    "CHR MAJ MIN DOR MIX PEN MPEN HARM PHRY LYD LOC MEL BLUES WHOLE DIMHW DIMWH "
-    "T.RST USSAK HUSEY KURDI NIHAV HICAZ HCKAR SUZIN KARCI T.SBA SEGAH HUZZM "
-    "RAST BAYAT SABA SIKAH HIJAZ NAHAW KURD AJAM NIKRZ HJKAR SUZNK HUZAM "
-    "YAMAN BILAW KHMAJ KAFI ASAVR BHRVI BHAIR TODI PURVI MARWA BHUPL MALKS "
-    "P.HUS P.MSR P.NEV P.USK P.NHK P.HKR P.HJZ P.SUB P.SU6 P.SEE P.BHL P.CHG P.HMY "
-    "P.RST P.ACR P.MHR J.KGL J.NRZ J.SZK J.HJR J.DRB"
-).split()
-EXPECT_SET = [0] * 16 + [1] * 12 + [2] * 12 + [3] * 12 + [4] * 16 + [5] * 5   # set of each frozen index
+# Indices follow the files (west, then arab), as in Sinfon. CHR must stay index 0: a new project's scale,
+# all-zero tables. Projects saved with the six-set library's indices are mapped by scales/legacy.txt.
+FIRST = "CHR"
+LEGACY_COUNT = 73
+# The FM1 shows at most 8 ASCII characters; Sinfon's longer names are shortened for the display only.
+DISPLAY = {"PHDOM": "Hicaz", "BSHRI": "BaySuri", "BSTNK": "Bastnkar"}
 
 LETTER = {"C": 0, "D": 4, "E": 8, "F": 10, "G": 14, "A": 18, "B": 22}
 SUFFIX = {"": 0, "b": -2, "#": 2, "d": -1, "+": 1}
@@ -117,13 +113,17 @@ def parse_file(path, setname):
         where = f"{path.name}:{ln}"
         m = re.fullmatch(r'scale\s+(\S+)\s+"([^"]*)"\s+home\s+(\S+)', line)
         if m:
-            cur = dict(code=m.group(1), name=m.group(2), home=m.group(3), set=setname,
+            cur = dict(code=m.group(1), name=DISPLAY.get(m.group(1), m.group(2)), home=m.group(3), set=setname,
                        src=where, **{"from": None, "up": None, "down": None})
             scales.append(cur)
             continue
         if cur is None:
             raise Err(f"{where}: line outside a scale: {line}")
         key, _, rest = line.partition(" ")
+        if key == "alias":
+            if not re.fullmatch(r'"[^"]+"', rest.strip()):
+                raise Err(f"{where}: scale {cur['code']}: alias needs a quoted name")
+            continue
         if key not in ("from", "up", "down") or cur[key] is not None:
             raise Err(f"{where}: scale {cur['code']}: unexpected or repeated '{key}'")
         cur[key] = rest.split()
@@ -229,18 +229,8 @@ def load(d):
         if sc["code"] in seen:
             raise Err(f"{sc['src']}: scale {sc['code']}: duplicate code (also {seen[sc['code']]})")
         seen[sc["code"]] = sc["src"]
-    # Index order: the frozen codes keep their positions whatever the line order in the files; any
-    # other scale is appended after them, in file order (west, turk, arab, india, psych, jins), so a new scale
-    # can be added to any set's file without moving the existing ones.
-    by = {sc["code"]: sc for sc in out}
-    for i, code in enumerate(FROZEN):
-        if code not in by:
-            raise Err(f"scale {code} (frozen index {i}, set {SETS[EXPECT_SET[i]]}) is missing: "
-                      f"scales may be added but never removed (indices are append-only)")
-        if SETS.index(by[code]["set"]) != EXPECT_SET[i]:
-            raise Err(f"{by[code]['src']}: scale {code} is in set {by[code]['set']}, frozen index {i} "
-                      f"belongs to {SETS[EXPECT_SET[i]]}")
-    out = [by[c] for c in FROZEN] + [sc for sc in out if sc["code"] not in FROZEN]
+    if not out or out[0]["code"] != FIRST:
+        raise Err(f"{d / FILES[SETS[0]]}: the first scale must be {FIRST} (index 0, a new project's scale)")
     res = []
     for sc in out:
         up, down, ex, off, home = build(sc)
@@ -254,7 +244,33 @@ def load(d):
     return res
 
 
-def emit(res):
+def load_legacy(d, res):
+    """scales/legacy.txt: the six-set library's 73 codes in old index order, each mapped to a code or '-'.
+    -> [new index or 255] in old index order."""
+    p = Path(d) / "legacy.txt"
+    if not p.exists():
+        raise Err(f"{p}: missing legacy map")
+    index = {r["code"]: i for i, r in enumerate(res)}
+    out, olds = [], set()
+    for ln, raw in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.split("#", 1)[0].split()
+        if not line:
+            continue
+        where = f"{p.name}:{ln}"
+        if len(line) != 3 or not line[0].isdigit() or int(line[0]) != len(out):
+            raise Err(f"{where}: expected '<index> <old code> <new code or ->' with index {len(out)}")
+        if line[1] in olds:
+            raise Err(f"{where}: old code {line[1]} repeated")
+        olds.add(line[1])
+        if line[2] != "-" and line[2] not in index:
+            raise Err(f"{where}: {line[1]} maps to {line[2]}, which is not in the library")
+        out.append(255 if line[2] == "-" else index[line[2]])
+    if len(out) != LEGACY_COUNT:
+        raise Err(f"{p}: {len(out)} entries, expected {LEGACY_COUNT}")
+    return out
+
+
+def emit(res, legacy):
     """-> (header, source): declarations in scales.h, the one copy of the data in scales.c."""
     H = ["/* generated by tools/gen_scales.py from the scales/ files: do not edit */",
          "/* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */",
@@ -278,6 +294,9 @@ def emit(res):
          "extern const char *const SET_NAMES[NSETS];",
          "extern const scale_def_t SCALES[NSCALES];",
          "extern const char SCALE_CODE_STR[NSCALES][6]; /* the codes: host tools and tests only, the firmware does not use them */",
+         "/* Six-set library index (settings tag 0xA1) -> index here, or 0xFF when the scale has no counterpart. */",
+         f"#define NSCALES_LEGACY {len(legacy)}",
+         "extern const uint8_t SCALE_LEGACY[NSCALES_LEGACY];",
          "#endif", ""]
     C = ["/* generated by tools/gen_scales.py from the scales/ files: do not edit */",
          "/* SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception */",
@@ -294,6 +313,8 @@ def emit(res):
             + (",".join(str(t) for t in off12),)))
     C += ["};", "", "const char SCALE_CODE_STR[NSCALES][6] = {"]
     C += ["    " + ", ".join('"%s"' % res[i]["code"] for i in range(r, min(r + 8, len(res)))) + "," for r in range(0, len(res), 8)]
+    C += ["};", "", "const uint8_t SCALE_LEGACY[NSCALES_LEGACY] = {"]
+    C += ["    " + ", ".join(str(legacy[i]) for i in range(r, min(r + 16, len(legacy)))) + "," for r in range(0, len(legacy), 16)]
     C += ["};", ""]
     return "\n".join(H), "\n".join(C)
 
@@ -335,6 +356,7 @@ def main(argv):
         return 2
     try:
         res = load(d)
+        legacy = load_legacy(d, res)
     except Err as e:
         print(f"gen_scales: error: {e}", file=sys.stderr)
         return 1
@@ -348,7 +370,7 @@ def main(argv):
         for root in ([asg[1]] if len(asg) > 1 else range(24)):
             print(assign_text(r, root))
     if out:
-        h, c = emit(res)
+        h, c = emit(res, legacy)
         out = Path(out)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(h)

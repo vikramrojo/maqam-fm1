@@ -1,0 +1,6 @@
+# Vendored from Sinfon (github vikramrojo/maqam-dev), SketchKit/Sources/SketchCore/Scales, by tools/sync_scales.sh.
+# Do not edit these files here: change them in Sinfon and re-sync. tests/scales_check.py verifies the hashes.
+commit f461dac9971febe1f64a9a81b77f5bfbb06df4cd
+sha256 west.txt 93714d78d9a6110ba7bd991fd2b5f5997ba467ec72605e6bc1e0db50deff10f6
+sha256 arab.txt 1562c6966bbf66b4d6c17c8dda778ed5879f9283d3a43e3004a0689c6c82d266
+sha256 SOURCE.md 1134e694c0c09e05956df3a9e4a869cb411e115a6cf9bbeac26c8a8939d1d4ec

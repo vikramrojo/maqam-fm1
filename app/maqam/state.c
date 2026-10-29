@@ -2,6 +2,7 @@
 /* Project scale, per-track override and intonation. Tables live in the engine (V13 saves them); this
    file keeps only the labels and the 8-byte trailer. */
 #include "maqam.h"
+#include "scales.h"
 #include <string.h>
 
 static struct {
@@ -124,9 +125,17 @@ MAQAM_SMALL void maqam_project_save(uint8_t t[MAQAM_TRAILER_BYTES])
     maqam_chords_save(t + 5);
     t[7] = check(t);
 }
+/* The project scale's library index, or -1 if invalid. A six-set index (tag 0xA1) maps through SCALE_LEGACY;
+   a scale with no counterpart there falls back to CHR, and the tables decide each track's label. */
+MAQAM_SMALL static int trailer_scale(const uint8_t *t)
+{
+    if (t[0] == MAQAM_TRAILER_TAG) return t[1] < maqam_scale_count() ? t[1] : -1;
+    if (t[0] != MAQAM_TRAILER_TAG_V1 || t[1] >= NSCALES_LEGACY) return -1;
+    return SCALE_LEGACY[t[1]] == 0xFF ? 0 : SCALE_LEGACY[t[1]];
+}
 MAQAM_SMALL static int trailer_ok(const uint8_t *t)
 {
-    return t && t[0] == MAQAM_TRAILER_TAG && t[7] == check(t) && t[1] < maqam_scale_count() && t[2] < 24 &&
+    return t && t[7] == check(t) && trailer_scale(t) >= 0 && t[2] < 24 &&
            !(t[3] & ~7U) && (t[3] >> 1 & 3U) < 3 && !maqam_chords_load(t + 5, 0);
 }
 /* The engine tables decide: a track whose main table is not the project scale's gets its own label by
@@ -138,7 +147,7 @@ MAQAM_SMALL static void derive(const uint8_t *t, unsigned chords)
     unsigned over = 0;
     st_reset();
     if (trailer_ok(t)) {
-        st.scale = t[1]; st.root = t[2]; st.trad = t[3] & 1U; st.layout = (t[3] >> 1 & 3U) == MAQAM_CHROM;   /* 2-3 (the old WHITE, never shipped) load as SNAP */
+        st.scale = (uint8_t)trailer_scale(t); st.root = t[2]; st.trad = t[3] & 1U; st.layout = (t[3] >> 1 & 3U) == MAQAM_CHROM;   /* 2-3 (the old WHITE, never shipped) load as SNAP */
         over = t[4];
         if (chords) maqam_chords_load(t + 5, 1);
     }

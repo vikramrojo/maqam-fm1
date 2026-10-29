@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception
 # Fails if app/maqam/scales.h or scales.c is not what tools/gen_scales.py generates from scales/*.txt,
-# then runs the scale checks and error fixtures.
+# then runs the scale checks, error fixtures and the vendored-hash check (scales/UPSTREAM).
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/scales.XXXXXX")

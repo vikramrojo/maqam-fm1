@@ -219,10 +219,10 @@ static void state_push(void)
     CHECK(track_is(2, by, 4, 1, 1));
     for (unsigned t = 0; t < 7; ++t) if (t != 2) CHECK(track_is(t, rs, 0, 1, 1));
     CHECK(maqam_set_override(7, by, 4) < 0 && maqam_set_override(2, NSCALES, 0) < 0 && maqam_set_override(2, by, 24) < 0);
-    CHECK(maqam_set_project(find("HICAZ"), 0) == 0);                  /* override stays */
-    CHECK(track_is(2, by, 4, 1, 1) && maqam_track_scale(2) == by && maqam_track_scale(3) == find("HICAZ"));
+    CHECK(maqam_set_project(find("HIJAZ"), 0) == 0);                  /* override stays */
+    CHECK(track_is(2, by, 4, 1, 1) && maqam_track_scale(2) == by && maqam_track_scale(3) == find("HIJAZ"));
     CHECK(maqam_clear_override(2) == 0 && !maqam_overridden(2));
-    CHECK(track_is(2, find("HICAZ"), 0, 1, 1));
+    CHECK(track_is(2, find("HIJAZ"), 0, 1, 1));
     CHECK(maqam_set_project(rs, 0) == 0);
     /* non-melodic: an 808 track is not retuned */
     CHECK(groove_source_set(5, GROOVE_808) == 0);
@@ -280,7 +280,7 @@ static uint32_t v5_crc(const uint8_t *s)
 }
 static void trailer(void)
 {
-    unsigned t7 = find("T.RST"), by = find("BAYAT");
+    unsigned t7 = find("MAHUR"), by = find("BAYAT");
     fresh();
     CHECK(maqam_set_project(t7, 4) == 0 && maqam_set_override(2, by, 4) == 0);
     CHECK(maqam_set_alt(3, G, 17) == 0);
@@ -290,7 +290,7 @@ static void trailer(void)
     const uint8_t *s = ms(3);
     uint8_t x = 0;
     for (unsigned i = 0; i < 7; ++i) x ^= s[i];
-    CHECK(s[0] == 0xA1 && s[1] == t7 && s[2] == 4 && s[3] == 1 && s[4] == 4 && !s[5] && !s[6] && s[7] == (uint8_t)~x);
+    CHECK(s[0] == MAQAM_TRAILER_TAG && s[1] == t7 && s[2] == 4 && s[3] == 1 && s[4] == 4 && !s[5] && !s[6] && s[7] == (uint8_t)~x);
     /* the project record is V14's own, its checksum unchanged by maqam */
     uint32_t crc;
     memcpy(&crc, sector(3) + 12, 4);
@@ -321,7 +321,7 @@ static void trailer(void)
     CHECK(groove_project_save_slot(GROOVE_PROJECT_SLOTS - 1) == 0);
     uint8_t before[8];
     memcpy(before, ms(GROOVE_PROJECT_SLOTS - 1), 8);
-    CHECK(before[0] == 0xA1);
+    CHECK(before[0] == MAQAM_TRAILER_TAG);
     groove_settings_clock(GROOVE_CLOCK_MIDI);
     settle(); settle();
     CHECK(groove_settings_status() == 0);
@@ -357,11 +357,11 @@ static void trailer(void)
     ms(5)[7] ^= 1; entry_fix(5);
     maqam_init(); CHECK(groove_tuning_apply(z) == 0);
     CHECK(groove_project_load_slot(5) == 0 && is_tables(stock) && maqam_project_scale() == 0 && maqam_track_scale(1) == by);
-    CHECK(groove_project_save_slot(5) == 0 && ms(5)[0] == 0xA1);
+    CHECK(groove_project_save_slot(5) == 0 && ms(5)[0] == MAQAM_TRAILER_TAG);
     entry(5)[13] ^= 1;
     maqam_init(); CHECK(groove_tuning_apply(z) == 0);
     CHECK(groove_project_load_slot(5) == 0 && maqam_project_scale() == 0);
-    CHECK(groove_project_save_slot(5) == 0 && ms(5)[0] == 0xA1);   /* a save restores the entry */
+    CHECK(groove_project_save_slot(5) == 0 && ms(5)[0] == MAQAM_TRAILER_TAG);   /* a save restores the entry */
 }
 
 /* Settings belong to the exact project: a slot replaced elsewhere (here: its tempo edited and
@@ -371,7 +371,7 @@ static void replaced(void)
     unsigned rs = find("RAST");
     fresh();
     CHECK(maqam_set_project(rs, 0) == 0);
-    CHECK(groove_project_save_slot(8) == 0 && ms(8)[0] == 0xA1);
+    CHECK(groove_project_save_slot(8) == 0 && ms(8)[0] == MAQAM_TRAILER_TAG);
     sector(8)[20 + 3832] ^= 1;                                       /* the project's tempo (120 -> 121) */
     uint32_t crc = v6_crc(sector(8));
     memcpy(sector(8) + 12, &crc, 4);
@@ -383,14 +383,31 @@ static void replaced(void)
 
 /* A project saved by the V13 fork: a V5 record with the 8 settings bytes right after it. It loads with
    them; the next save stores an entry and V14 rewrites the record as V6. */
+static void chords(unsigned track, unsigned type, unsigned inv, unsigned voice);
+static unsigned chord_is(unsigned t, unsigned mode, unsigned type, unsigned inv, unsigned voice);
+/* Settings saved before the two-set library: tag 0xA1 with a six-set index (scales/legacy.txt). */
+static void to_v1(uint8_t t[8], unsigned old_index)
+{
+    uint8_t x = 0;
+    t[0] = MAQAM_TRAILER_TAG_V1; t[1] = (uint8_t)old_index;
+    for (unsigned i = 0; i < 7; ++i) x ^= t[i];
+    t[7] = (uint8_t)~x;
+}
+/* A project saved by the V13 fork: a V5 record with the 8 settings bytes right after it, in the six-set
+   format. Its scale migrates (Ussak, old index 17, is now Bayati), root and chord settings are kept, and
+   the next save stores an entry with tag 0xA2 and a V6 record. A personal scale with no counterpart
+   (P.HUS, 52) falls back to CHR and keeps the rest; an index past the old library is rejected. */
 static void migrate(void)
 {
-    unsigned t7 = find("T.RST");
+    unsigned by = find("BAYAT");
     fresh();
-    CHECK(maqam_set_project(t7, 4) == 0);
-    CHECK(groove_project_save_slot(9) == 0);
-    uint8_t old[8];
-    memcpy(old, ms(9), 8);
+    CHECK(maqam_set_project(by, 4) == 0);
+    chords(2, MAQAM_CHORD_7TH, MAQAM_INV_AUTO, MAQAM_VOICE_OPEN);
+    CHECK(groove_project_save_slot(9) == 0 && ms(9)[0] == MAQAM_TRAILER_TAG);
+    uint8_t now[8], old[8];
+    memcpy(now, ms(9), 8);
+    memcpy(old, now, 8);
+    to_v1(old, 17);                                                  /* USSAK */
     wipe_tail(9);
     uint8_t *s = sector(9);
     uint32_t magic = 0x35504d46U;                                    /* V5_PROJECT_MAGIC */
@@ -401,13 +418,22 @@ static void migrate(void)
     memcpy(s + 12, &crc, 4);
     tun8 z; memset(z, 0, sizeof z);
     maqam_init(); CHECK(groove_tuning_apply(z) == 0);
-    CHECK(groove_project_load_slot(9) == 0 && maqam_project_scale() == t7 && maqam_project_root() == 4);
-    CHECK(groove_project_save_slot(9) == 0 && !memcmp(ms(9), old, 8));
+    CHECK(groove_project_load_slot(9) == 0 && maqam_project_scale() == by && maqam_project_root() == 4);
+    CHECK(chord_is(2, 1, MAQAM_CHORD_7TH, MAQAM_INV_AUTO, MAQAM_VOICE_OPEN));
+    CHECK(groove_project_save_slot(9) == 0 && !memcmp(ms(9), now, 8));   /* saved in the new format */
     memcpy(&magic, sector(9), 4);
     CHECK(magic == 0x36504d46U);                                     /* PROJECT_MAGIC (V6) */
     maqam_init(); CHECK(groove_tuning_apply(z) == 0);
-    CHECK(groove_project_load_slot(9) == 0 && maqam_project_scale() == t7);
-    printf("migrate: a V13-fork V5 record keeps its settings and is saved as V6 with an entry\n");
+    CHECK(groove_project_load_slot(9) == 0 && maqam_project_scale() == by);
+    /* a maqam-sector entry in the old format, with a scale that has no counterpart */
+    to_v1(ms(9), 52); entry_fix(9);                                  /* P.HUS */
+    maqam_init(); CHECK(groove_tuning_apply(z) == 0);
+    CHECK(groove_project_load_slot(9) == 0 && maqam_project_scale() == 0 && maqam_project_root() == 4);
+    CHECK(chord_is(2, 1, MAQAM_CHORD_7TH, MAQAM_INV_AUTO, MAQAM_VOICE_OPEN));
+    to_v1(ms(9), NSCALES_LEGACY); entry_fix(9);                      /* past the old library: invalid */
+    maqam_init(); CHECK(groove_tuning_apply(z) == 0);
+    CHECK(groove_project_load_slot(9) == 0 && maqam_project_root() == 0 && chord_is(2, 0, MAQAM_CHORD_TRIAD, MAQAM_INV_ROOT, MAQAM_VOICE_CLOSE));
+    printf("migrate: six-set settings (V13-fork trailer or old entry) map to the two-set library; saved as 0xA2\n");
 }
 
 /* An older sample bank reaching into the maqam sector: non-default settings are not saved (the stock
@@ -423,7 +449,7 @@ static void covered(void)
     CHECK(maqam_set_project(rs, 0) == 0);
     CHECK(groove_project_save_slot(10) == GROOVE_PROJECT_TUNING_SPACE && ms(10)[0] == 0xff);
     memset(sim_flash() + GROOVE_SAMPLE_OFFSET, 0xff, sizeof h);
-    CHECK(groove_project_save_slot(10) == 0 && ms(10)[0] == 0xA1);
+    CHECK(groove_project_save_slot(10) == 0 && ms(10)[0] == MAQAM_TRAILER_TAG);
     printf("covered: an old sample bank over the sector blocks non-default settings only\n");
 }
 
@@ -431,7 +457,7 @@ static void covered(void)
    an uncommitted one is dropped and the old sector stands. Other slots keep their entries. */
 static void staged(void)
 {
-    unsigned rs = find("RAST"), t7 = find("T.RST");
+    unsigned rs = find("RAST"), t7 = find("MAHUR");
     fresh();
     CHECK(maqam_set_project(rs, 0) == 0 && groove_project_save_slot(11) == 0);
     CHECK(maqam_set_project(t7, 0) == 0 && groove_project_save_slot(12) == 0);
@@ -585,13 +611,13 @@ static void matching(void)
     CHECK(maqam_overridden(3) && maqam_track_scale(3) == MAQAM_CUSTOM);   /* shown as CUSTOM */
     CHECK(!maqam_overridden(0) && maqam_track_scale(0) == rs);
     CHECK(is_tables(want));                                             /* tables not changed by loading */
-    CHECK(maqam_set_project(find("HICAZ"), 0) == 0);                    /* nor by project changes */
+    CHECK(maqam_set_project(find("HIJAZ"), 0) == 0);                    /* nor by project changes */
     struct groove_tuning g;
     get(3, &g); CHECK(!memcmp(&g, &h, sizeof g));
     CHECK(maqam_set_intonation(0) == 0);
     get(3, &g); CHECK(!memcmp(&g, &h, sizeof g));
     CHECK(maqam_clear_override(3) == 0);                                /* clearing re-follows the project */
-    CHECK(track_is(3, find("HICAZ"), 0, 0, 1));
+    CHECK(track_is(3, find("HIJAZ"), 0, 0, 1));
 }
 
 int main(void)

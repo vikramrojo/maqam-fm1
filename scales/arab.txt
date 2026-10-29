@@ -1,9 +1,11 @@
-# SLOOP scales: ARAB set (index 28..39)
+# Maqam scales: ARAB set (24-TET maqamat). The app owns this file; see SOURCE.md for its history.
 # Source: al-Sabbagh (1954) 24-tone ratios; degree structure after Touma, The Music of the Arabs,
 # and maqamworld.com. CHECK the ratios against the printed source before release.
 # Ratios from rast: zirguleh 16/15, dugah 9/8, kurdi 6/5, segah 102/83, nimbuselik 5/4,
 #   chahargah 4/3, hijaz 45/32, tikhijaz 729/512, nawa 3/2, hisar 189/118, husayni 27/16,
 #   ajam 883/490, awj 400/217, nimmahur 15/8.
+#   awj is also segah x 3/2 (153/83) to within 0.1 cent; the pure fourth or fifth above a named note is
+#   used below wherever a maqam needs a half-flat the list does not name.
 # Every value is written as a ratio from RAST (the maqam's note names are in the comment).
 # `from <ratio>` names the maqam's own tonic: the generator divides every value by it and
 # octave-reduces, so a maqam on dugah is relative to dugah. The first value is the tonic.
@@ -16,6 +18,7 @@ scale RAST  "Rast" home C
 scale BAYAT "Bayati" home D
   from 9/8
   up   9/8 102/83 4/3 3/2 27/16 883/490 1/1   # dugah segah chahargah nawa husayni ajam rast
+  alias "Uşşak"
 
 scale SABA  "Saba" home D
   from 9/8
@@ -25,6 +28,7 @@ scale SIKAH "Sikah" home Ed
   from 102/83
   up   102/83 4/3 3/2 27/16 400/217 1/1 9/8   # segah chahargah nawa husayni awj rast dugah
   down 102/83 4/3 3/2 27/16 883/490 1/1 9/8   # segah chahargah nawa husayni ajam rast dugah
+  alias "Segah"
 
 scale HIJAZ "Hijaz" home D
   from 9/8
@@ -35,14 +39,18 @@ scale NAHAW "Nahawand" home C
   from 1/1
   up   1/1 9/8 6/5 4/3 3/2 189/118 15/8   # rast dugah kurdi chahargah nawa hisar nimmahur
   down 1/1 9/8 6/5 4/3 3/2 189/118 883/490   # rast dugah kurdi chahargah nawa hisar ajam
+  alias "Nihavend"
 
 scale KURD  "Kurd" home D
   from 9/8
   up   9/8 6/5 4/3 3/2 27/16 883/490 1/1   # dugah kurdi chahargah nawa husayni ajam rast
+  alias "Kürdi"
 
 scale AJAM  "Ajam" home Bb
   from 883/490
-  up   883/490 1/1 9/8 6/5 4/3 3/2 27/16   # ajam rast dugah kurdi chahargah nawa husayni
+  # chahargah is replaced by 2649/1960 = ajam x 3/2 / 2, so the fifth above the tonic is a pure 3/2 (702 c);
+  # with the plain chahargah 4/3 the fifth was 678 c. Every other value is unchanged.
+  up   883/490 1/1 9/8 6/5 2649/1960 3/2 27/16   # ajam rast dugah kurdi (F = pure fifth) nawa husayni
 
 scale NIKRZ "Nikriz" home C
   from 1/1
@@ -51,13 +59,59 @@ scale NIKRZ "Nikriz" home C
 scale HJKAR "Hijazkar" home C
   from 1/1
   up   1/1 16/15 5/4 4/3 3/2 189/118 15/8   # rast zirguleh nimbuselik chahargah nawa hisar nimmahur
+  alias "Hicazkar"
+  alias "Bhairav"
 
 scale SUZNK "Suznak" home C
   from 1/1
   up   1/1 9/8 102/83 4/3 3/2 189/118 15/8   # rast dugah segah chahargah nawa hisar nimmahur
   down 1/1 9/8 102/83 4/3 3/2 27/16 883/490   # rast dugah segah chahargah nawa husayni ajam
+  alias "Suzinak"
 
 scale HUZAM "Huzam" home Ed
   from 102/83
   up   102/83 4/3 3/2 189/118 15/8 1/1 9/8   # segah chahargah nawa hisar nimmahur rast dugah
   down 102/83 4/3 3/2 27/16 883/490 1/1 9/8   # segah chahargah nawa husayni ajam rast dugah
+  alias "Hüzzam"
+
+# --- Added maqamat (maqamworld.com's note maps, ratios from this file's named notes) ---
+
+scale NAIRZ "Nairuz" home C
+  from 1/1
+  # Rast on C + Bayati on G. A half-flat = segah x 4/3 (136/83), the same note as Bayati on G gives (nawa x 272/249).
+  # B flat = ajam, as in Rast's descending form.
+  up   1/1 9/8 102/83 4/3 3/2 136/83 883/490   # rast dugah segah chahargah nawa (segah x 4/3) ajam
+
+scale MAHUR "Mahur" home C
+  from 1/1
+  # Rast + upper Ajam on G: G A B = nawa husayni nimmahur. All named notes.
+  up   1/1 9/8 102/83 4/3 3/2 27/16 15/8   # rast dugah segah chahargah nawa husayni nimmahur
+  alias "Rast (Turkish)"
+
+scale HUSNI "Husayni" home D
+  from 9/8
+  # Bayati on D + Bayati on A. The upper half-flat is awj (= segah x 3/2); descending it is ajam (B flat).
+  up   9/8 102/83 4/3 3/2 27/16 400/217 1/1   # dugah segah chahargah nawa husayni awj rast
+  down 9/8 102/83 4/3 3/2 27/16 883/490 1/1   # dugah segah chahargah nawa husayni ajam rast
+  alias "Hüseyni"
+
+scale BSHRI "Bayati Shuri" home D
+  from 9/8
+  # Bayati on D + Hijaz on G (G A flat B C = nawa hisar nimmahur rast, as in Hijazkar). All named notes.
+  up   9/8 102/83 4/3 3/2 189/118 15/8 1/1   # dugah segah chahargah nawa hisar nimmahur rast
+  alias "Karcığar"
+
+scale IRAQ  "'Iraq" home Bd
+  from 400/217
+  # Sikah on awj (B half-flat) + Bayati on D + Rast on G. All named notes.
+  up   400/217 1/1 9/8 102/83 4/3 3/2 27/16   # awj rast dugah segah chahargah nawa husayni
+
+scale BSTNK "Bastanikar" home Bd
+  from 400/217
+  # One-octave form: Sikah on awj + Saba on D (D E half-flat F G flat). maqamworld's scale runs two octaves.
+  up   400/217 1/1 9/8 102/83 4/3 45/32 27/16   # awj rast dugah segah chahargah hijaz husayni
+
+scale JIHRK "Jiharkah" home F
+  from 4/3
+  # Jins Jiharkah on F (F G A B flat) + upper Rast (C D E half-flat). B flat = ajam, E half-flat = segah (octave up).
+  up   4/3 3/2 27/16 883/490 1/1 9/8 102/83   # chahargah nawa husayni ajam rast dugah segah

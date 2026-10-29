@@ -16,10 +16,13 @@ static inline int scale_cents(const scale_def_t *s, unsigned slot)
 {
     return (int)slot * 50 + s->off[scale_popcount((scale_up(s) | scale_down(s)) & ((1U << slot) - 1U))];
 }
-enum { SET_WEST, SET_TURK, SET_ARAB, SET_INDIA, SET_PSYCH, SET_JINS, NSETS };
-#define NSCALES 73
+enum { SET_WEST, SET_ARAB, NSETS };
+#define NSCALES 36
 /* defined once in scales.c */
 extern const char *const SET_NAMES[NSETS];
 extern const scale_def_t SCALES[NSCALES];
 extern const char SCALE_CODE_STR[NSCALES][6]; /* the codes: host tools and tests only, the firmware does not use them */
+/* Six-set library index (settings tag 0xA1) -> index here, or 0xFF when the scale has no counterpart. */
+#define NSCALES_LEGACY 73
+extern const uint8_t SCALE_LEGACY[NSCALES_LEGACY];
 #endif

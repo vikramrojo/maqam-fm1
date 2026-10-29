@@ -226,7 +226,7 @@ static void spelling(void)
     maqam_name_scale(find("RAST"), RC, 60, -50, n); is("C4 at -50 on Rast C: Cd4", n, "C" HF "4");
 }
 
-/* All 73 scales x 24 roots: spelled with one letter per degree and a single accidental, or fixed names. */
+/* All 36 scales x 24 roots: spelled with one letter per degree and a single accidental, or fixed names. */
 static void exhaustive(void)
 {
     static const uint8_t nat[7] = {0, 4, 8, 10, 14, 18, 22};

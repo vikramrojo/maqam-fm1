@@ -1,7 +1,7 @@
 <!-- Ported from maqam-dev (GPL-3.0) SCALES.md and adapted for FM1 Open. -->
 # Scales and quarter tones on FM1 Open
 
-How to play and edit the 73 scales (Western, Turkish, Arabic, Indian, plus the PSYCH and JINS sets), quarter tones and per-step alternate pitches on the FM1 screen. This is the fork's scale feature (`openspec/changes/maqam-scales`); stock FM1 Open V13 only provides the engine tables underneath.
+How to play and edit the 36 scales (Western and Arabic, the same two sets as Sinfon), quarter tones and per-step alternate pitches on the FM1 screen. This is the fork's scale feature (`openspec/changes/maqam-scales`); stock FM1 Open V13 only provides the engine tables underneath.
 
 Two words used throughout:
 - **Half-flat** (written `Ed` in text) is a quarter tone, 50 cents, below the note: E half-flat sits halfway between E-flat and E.
@@ -17,7 +17,7 @@ Panel words: **SELECT** is the first encoder (track), **ALGO** the second (page)
 - Choosing a scale **computes the main table**. Choosing a root and a scale puts each degree on one of the 12 keys, so the keys play the scale's exact pitches.
 - **Intonation** decides how exact:
   - **EQUAL** puts each degree on the quarter-tone grid: offsets are 0 or exactly -50 / +50 from the key.
-  - **TRAD** (the default) uses the scale's exact pitch to a whole cent: Pythagorean for Turkish, al-Ṣabbāgh for Arabic, just intonation for Indian. Rast on C: E -43, B -41, A# +20, D +4, F -2, G +2, A +6. Western, PSYCH and JINS scales are equal in both.
+  - **TRAD** (the default) uses the scale's exact pitch to a whole cent: al-Ṣabbāgh's ratios for the Arabic maqamat. Rast on C: E -43, B -41, A# +20, D +4, F -2, G +2, A +6. Western scales are equal in both.
   - It is a **project** setting. Switching it recomputes every track that follows a scale and does not touch alt edits.
 - **Drum tracks** (808, sampler, track 8) are never tuned.
 
@@ -79,7 +79,7 @@ Wherever a melodic note is named (the step tiles, the step NOTE knob, the NOTE k
 
 are used when the pitch is not a degree and its key carries none, and for the whole scale when a form does not have seven degrees (pentatonic, whole-tone, diminished, chromatic) or a degree would need a double accidental. A zero offset on such a scale gives exactly the stock 12-tone name, so Western scales look as they always did: Pentatonic on C plays its D# key as `D#4` (`names_test` "PEN on C"), and every one of the 128 notes under WEST chromatic is the stock name (`names_test` "WEST CHR"). An out-of-scale pitch on a key that carries a degree keeps the degree's letter: on a Rast-on-C track an alt E at -100 reads `Eb4` because the E key carries Ed (`names_test` "Rast C alt E at -100"). Without a degree on the key it is a fixed name: C# on Rast reads `C#4` (`names_test` "Rast C: C# key").
 
-Spelling is computed from the scale and root every time; nothing is stored. Of the 73 scales on the 24 roots, 1093 of 1752 pairs are spelled and the rest use the fixed names (`names_test` "spelling:" line).
+Spelling is computed from the scale and root every time; nothing is stored. Of the 36 scales on the 24 roots, 549 of 864 pairs are spelled and the rest use the fixed names (`names_test` "spelling:" line).
 
 - **Alt steps carry a dot**: a step that holds alt E in a Rast track reads `E4.` while a plain E step reads `Ed4` (`names_test` "Rast TRAD, E4 alt"). The name of an alt step comes from the alt table.
 - Drum tracks show the stock names.
@@ -98,7 +98,7 @@ Under the section row the pages show the subtitle of the selected track:
 
 `Ed arab sikah^ trad` (`pages_test` "subtitle after K1/K2/K3") = root Ed (E half-flat), set ARAB, scale Sikah, TRAD.
 
-- The arrow after the scale name (up or down, as the last key of the track went) shows **only for scales whose two forms differ**. Scales with one form (Major, Bilawal ...) show none.
+- The arrow after the scale name (up or down, as the last key of the track went) shows **only for scales whose two forms differ**. Scales with one form (Major, Lydian ...) show none.
 - The line under it says `TRACK 1  FOLLOWS PROJECT`, `TRACK 1  OWN SCALE`, `TRACK 1  CUSTOM TABLE`, or for drum tracks `TRACK 8  DRUMS - NOT TUNED`.
 - The **home hint** `home: Ed` shows the scale's traditional tonic for non-Western scales. It is a hint only: choosing a scale never moves the root. To play Sikah at home, set the root to E half-flat with K1.
 - If the last project save was refused because a sample bank leaves no room for the tuning tables, the pages show **SAVE FAILED: REDUCE SAMPLE BANK** (section 6).
@@ -108,7 +108,7 @@ Under the section row the pages show the subtitle of the selected track:
 | Control | Does |
 |---|---|
 | **K1 ROOT** | the root, a quarter tone per click (24 positions, wraps) |
-| **K2 SET** | WEST, TURK, ARAB, INDIA, PSYCH, JINS (jumps to that set's first scale) |
+| **K2 SET** | WEST or ARAB (jumps to that set's first scale) |
 | **K3 SCALE** | the scale within the set (wraps) |
 | **K4 TUNING** | right = TRAD, left = EQUAL (always the project's) |
 
@@ -201,127 +201,92 @@ BASS adds the pedal an octave lower again; OPEN has no effect. Hüseyni on A, th
 
 ## 7. The scales
 
-Codes are the names in the scale files and tools (the pages show the Name); **Home** is the traditional tonic (a hint). Scales are append-only: a scale's index is saved in projects and never moves.
+Two sets, the same as Sinfon's (`scales/west.txt` and `scales/arab.txt` are copied from Sinfon unchanged; see `scales/README.md`). Codes are the names in the files and tools (the pages show the Name); **Home** is the traditional tonic (a hint). **Also known as** lists Sinfon's aliases: other names for the same notes, including the Turkish makams and Indian ragas of the earlier library.
 
-### WEST (16)
+### WEST (17)
 
 Western modes and symmetric scales, 12-tone equal temperament. Every offset is 0, so EQUAL and TRAD are identical.
 
-| Code | Name | Home | Forms differ |
-|---|---|---|---|
-| `CHR` | Chromat | C |  |
-| `MAJ` | Major | C |  |
-| `MIN` | Minor | C |  |
-| `DOR` | Dorian | C |  |
-| `MIX` | Mixolyd | C |  |
-| `PEN` | Penta | C |  |
-| `MPEN` | MinPenta | C |  |
-| `HARM` | HarmMin | C |  |
-| `PHRY` | Phrygian | C |  |
-| `LYD` | Lydian | C |  |
-| `LOC` | Locrian | C |  |
-| `MEL` | MelMin | C |  |
-| `BLUES` | Blues | C |  |
-| `WHOLE` | Whole | C |  |
-| `DIMHW` | DimHW | C |  |
-| `DIMWH` | DimWH | C |  |
+| Code | Name | Home | Forms differ | Also known as |
+|---|---|---|---|---|
+| `CHR` | Chromat | C |  |  |
+| `MAJ` | Major | C |  | Bilawal |
+| `MIN` | Minor | C |  | Asavari |
+| `DOR` | Dorian | C |  | Kafi |
+| `MIX` | Mixolyd | C |  | Khamaj |
+| `PEN` | Penta | C |  | Bhupali |
+| `MPEN` | MinPenta | C |  |  |
+| `HARM` | HarmMin | C |  |  |
+| `PHRY` | Phrygian | C |  | Bhairavi |
+| `LYD` | Lydian | C |  | Yaman |
+| `LOC` | Locrian | C |  |  |
+| `MEL` | MelMin | C |  |  |
+| `BLUES` | Blues | C |  |  |
+| `WHOLE` | Whole | C |  |  |
+| `DIMHW` | DimHW | C |  |  |
+| `DIMWH` | DimWH | C |  |  |
+| `PHDOM` | Hicaz (Phrygian dominant) | C |  | Hicaz, Hijaz 12-TET |
 
-### TURK (12)
+### ARAB (19)
 
-Turkish makamlar, Arel-Ezgi-Uzdilek system: Pythagorean ratios (built from 3/2).
+Arabic maqamat in al-Sabbagh's 24-tone ratios (Rast, Bayati, Sikah ... and Nairuz, Mahur, Husayni, Bayati Shuri, 'Iraq, Bastanikar, Jiharkah). TRAD plays each degree at its exact cents; EQUAL on the quarter-tone grid.
 
-| Code | Name | Home | Forms differ |
-|---|---|---|---|
-| `T.RST` | Rast | G | up / down |
-| `USSAK` | Ussak | A |  |
-| `HUSEY` | Huseyni | A | up / down |
-| `KURDI` | Kurdi | A |  |
-| `NIHAV` | Nihavend | G | up / down |
-| `HICAZ` | Hicaz | A | up / down |
-| `HCKAR` | Hicazkar | G |  |
-| `SUZIN` | Suzinak | G |  |
-| `KARCI` | Karcigar | A |  |
-| `T.SBA` | Saba | A |  |
-| `SEGAH` | Segah | Bd |  |
-| `HUZZM` | Huzzam | Bd |  |
+| Code | Name | Home | Forms differ | Also known as |
+|---|---|---|---|---|
+| `RAST` | Rast | C | yes |  |
+| `BAYAT` | Bayati | D |  | Uşşak |
+| `SABA` | Saba | D |  |  |
+| `SIKAH` | Sikah | Ed | yes | Segah |
+| `HIJAZ` | Hijaz | D | yes |  |
+| `NAHAW` | Nahawand | C | yes | Nihavend |
+| `KURD` | Kurd | D |  | Kürdi |
+| `AJAM` | Ajam | Bb |  |  |
+| `NIKRZ` | Nikriz | C |  |  |
+| `HJKAR` | Hijazkar | C |  | Hicazkar, Bhairav |
+| `SUZNK` | Suznak | C | yes | Suzinak |
+| `HUZAM` | Huzam | Ed | yes | Hüzzam |
+| `NAIRZ` | Nairuz | C |  |  |
+| `MAHUR` | Mahur | C |  | Rast (Turkish) |
+| `HUSNI` | Husayni | D | yes | Hüseyni |
+| `BSHRI` | BaySuri (Bayati Shuri) | D |  | Karcığar |
+| `IRAQ` | 'Iraq | Bd |  |  |
+| `BSTNK` | Bastnkar (Bastanikar) | Bd |  |  |
+| `JIHRK` | Jiharkah | F |  |  |
 
-### ARAB (12)
+### Old scale names
 
-Arabic maqamat, al-Ṣabbāgh (1954) 24-tone ratios; degree structure after Touma, *The Music of the Arabs*, and maqamworld.com.
+Projects saved before the two-set library store the old scale numbers; on load they are mapped through `scales/legacy.txt`, and the next save writes the new number. Tuning tables are never changed on load, so an old project sounds the same; a track whose old tuning differs from the new scale (Turkish AEU or Indian just intonation) shows its matched scale or CUSTOM until you choose the scale again. Old scales with no counterpart load with the project scale WEST Chromat, keeping root, intonation, layout and chord settings.
 
-| Code | Name | Home | Forms differ |
-|---|---|---|---|
-| `RAST` | Rast | C | up / down |
-| `BAYAT` | Bayati | D |  |
-| `SABA` | Saba | D |  |
-| `SIKAH` | Sikah | Ed | up / down |
-| `HIJAZ` | Hijaz | D | up / down |
-| `NAHAW` | Nahawand | C | up / down |
-| `KURD` | Kurd | D |  |
-| `AJAM` | Ajam | A# |  |
-| `NIKRZ` | Nikriz | C |  |
-| `HJKAR` | Hijazkar | C |  |
-| `SUZNK` | Suznak | C | up / down |
-| `HUZAM` | Huzam | Ed | up / down |
-
-### INDIA (12)
-
-Hindustani thaats and ragas, just-intonation swara ratios. Sa is the root.
-
-| Code | Name | Home | Forms differ |
-|---|---|---|---|
-| `YAMAN` | Yaman | C | up / down |
-| `BILAW` | Bilawal | C |  |
-| `KHMAJ` | Khamaj | C | up / down |
-| `KAFI` | Kafi | C |  |
-| `ASAVR` | Asavari | C | up / down |
-| `BHRVI` | Bhairavi | C |  |
-| `BHAIR` | Bhairav | C |  |
-| `TODI` | Todi | C |  |
-| `PURVI` | Purvi | C |  |
-| `MARWA` | Marwa | C |  |
-| `BHUPL` | Bhupali | C |  |
-| `MALKS` | Malkauns | C |  |
-
-### PSYCH (16)
-
-Microtonal "psych" scales as King Gizzard and the Lizard Wizard play them on quarter-tone-fretted guitars: five families built from a 12-TET frame plus a pair of notes that move. Equal quarter tones, so every offset is 0 and EQUAL = TRAD.
-
-| Code | Name | Home | Forms differ |
-|---|---|---|---|
-| `P.HUS` | Huseyni | A |  |
-| `P.MSR` | UshMasri | D |  |
-| `P.NEV` | Neva | A |  |
-| `P.USK` | Ussak | A |  |
-| `P.NHK` | NeutHkar | G |  |
-| `P.HKR` | Hicazkar | G |  |
-| `P.HJZ` | Hijaz | D |  |
-| `P.SUB` | SubPhryg | G |  |
-| `P.SU6` | SubPhr6 | G |  |
-| `P.SEE` | SeeMe | F# |  |
-| `P.BHL` | LowBhair | C |  |
-| `P.CHG` | Chahrgah | C |  |
-| `P.HMY` | Homayun | C |  |
-| `P.RST` | Rast | C |  |
-| `P.ACR` | AcemRast | G |  |
-| `P.MHR` | Mahur | C |  |
-
-### JINS (5)
-
-Combination scales: a lower jins and a different upper jins on the 5th, each attested (a KGLW song, a named Arabic maqam, or a Hindustani raga). Equal quarter tones, so EQUAL = TRAD.
-
-| Code | Name | Home | Forms differ |
-|---|---|---|---|
-| `J.KGL` | KGLW | B |  |
-| `J.NRZ` | Nairuz | C |  |
-| `J.SZK` | Suznak | C |  |
-| `J.HJR` | HijazRst | D |  |
-| `J.DRB` | Darbari | C |  |
-
----
+| Old | Now |
+|---|---|
+| `T.RST` | `MAHUR` Mahur |
+| `USSAK` | `BAYAT` Bayati |
+| `HUSEY` | `HUSNI` Husayni |
+| `KURDI` | `KURD` Kurd |
+| `NIHAV` | `NAHAW` Nahawand |
+| `HICAZ` | `PHDOM` Hicaz |
+| `HCKAR` | `HJKAR` Hijazkar |
+| `SUZIN` | `SUZNK` Suznak |
+| `KARCI` | `BSHRI` BaySuri |
+| `T.SBA` | `SABA` Saba |
+| `SEGAH` | `SIKAH` Sikah |
+| `HUZZM` | `HUZAM` Huzam |
+| `YAMAN` | `LYD` Lydian |
+| `BILAW` | `MAJ` Major |
+| `KHMAJ` | `MIX` Mixolyd |
+| `KAFI` | `DOR` Dorian |
+| `ASAVR` | `MIN` Minor |
+| `BHRVI` | `PHRY` Phrygian |
+| `BHAIR` | `HJKAR` Hijazkar |
+| `TODI` | none (CUSTOM tables) |
+| `PURVI` | none (CUSTOM tables) |
+| `MARWA` | none (CUSTOM tables) |
+| `BHUPL` | `PEN` Penta |
+| `MALKS` | none (CUSTOM tables) |
+| PSYCH and JINS (`P.*`, `J.*`) | none: Sinfon's importable custom set (`docs/custom-scales/psych-jins.txt` in Sinfon) |
 
 ## Credits and sources
 
-- The scale library, the generator (`tools/gen_scales.py`), the key-assignment idea, the 24 names, the SNAP layout, the direction rule and the screen conventions come from **maqam-dev** (SLOOP maqam scales, GPL-3.0). The PSYCH and JINS sets come from maqam-dev's pull request #4.
-- Turkish: Arel-Ezgi-Uzdilek system (Pythagorean ratios). Arabic: al-Ṣabbāgh (1954), Touma, *The Music of the Arabs*, maqamworld.com. Indian: just-intonation swara ratios (Bor (ed.), *The Raga Guide*). PSYCH / JINS: The Pop Descriptivist, "The Microtonal Scales of King Gizzard and the Lizard Wizard (a Primer and Compendium)", 2024; maqamworld.com; Wikipedia ("Acemli Rast", "Darbari Kanada"); Farhat, *The Dastgah Concept in Persian Music*. Each scale's source is cited in `scales/*.txt` and `scales/README.md`.
+- The scale library, the generator (`tools/gen_scales.py`), the key-assignment idea, the 24 names, the SNAP layout, the direction rule and the screen conventions come from **maqam-dev** (SLOOP maqam scales, GPL-3.0). Since the two-set library the scale files are Sinfon's (`scales/UPSTREAM`); the reasoning behind the two sets, and where the Turkish and Indian scales went, is in Sinfon's `openspec/assets/scale-system.md`.
+- Arabic: al-Ṣabbāgh (1954), Touma, *The Music of the Arabs*, maqamworld.com (the seven maqamat added in Sinfon). Turkish aliases: Bozkurt, Yarman, Karaosmanoğlu & Akkoç (2009), pitch measurements of Turkish makam performance. Each scale's source is cited in `scales/arab.txt` and `scales/SOURCE.md`.
 - Everything on this page is checked by host tests: `tests/host/pages_test.c`, `names_test.c`, `keys_test.c`, `maqam_test.c` (see `tests/host/README.md`).
